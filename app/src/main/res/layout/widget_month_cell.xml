@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One day: Day number in the middle (+N at its right when there are more than 3), then up to 3 entries (4 at 4×6, 5 at 4×7).
+     Sizes are in dp (not sp), so the phone's font size can't push the 3rd entry out of the cell.
+     On Android 12+ the widget also fits them to the real cell height. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/cell"
     android:layout_width="0dp"
@@ -7,22 +10,23 @@
     android:background="@drawable/widget_cell_bg"
     android:orientation="vertical"
     android:paddingStart="1dp"
-    android:paddingTop="2dp"
+    android:paddingTop="1dp"
     android:paddingEnd="1dp">
 
-    <!-- Day number in the middle, +N (more than 3) at the right of it. -->
     <FrameLayout
+        android:id="@+id/head"
         android:layout_width="match_parent"
-        android:layout_height="22dp">
+        android:layout_height="17dp">
 
         <TextView
             android:id="@+id/day"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="17dp"
+            android:layout_height="17dp"
             android:layout_gravity="center"
             android:gravity="center"
+            android:includeFontPadding="false"
             android:textColor="#FFFFFFFF"
-            android:textSize="12sp" />
+            android:textSize="11dp" />
 
         <TextView
             android:id="@+id/more"
@@ -30,49 +34,86 @@
             android:layout_height="wrap_content"
             android:layout_gravity="end|center_vertical"
             android:layout_marginEnd="1dp"
+            android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="#B3FFFFFF"
-            android:textSize="10sp"
+            android:textSize="9dp"
             android:visibility="gone" />
     </FrameLayout>
 
     <TextView
         android:id="@+id/chip0"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="10.5dp"
         android:layout_marginTop="1dp"
         android:background="@drawable/widget_chip_bg"
         android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:includeFontPadding="false"
         android:maxLines="1"
-        android:paddingStart="3dp"
-        android:paddingEnd="2dp"
+        android:paddingStart="2dp"
+        android:paddingEnd="1dp"
         android:textColor="#FFFFFFFF"
-        android:textSize="10sp"
+        android:textSize="8.5dp"
         android:visibility="gone" />
     <TextView
         android:id="@+id/chip1"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="10.5dp"
         android:layout_marginTop="1dp"
         android:background="@drawable/widget_chip_bg"
         android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:includeFontPadding="false"
         android:maxLines="1"
-        android:paddingStart="3dp"
-        android:paddingEnd="2dp"
+        android:paddingStart="2dp"
+        android:paddingEnd="1dp"
         android:textColor="#FFFFFFFF"
-        android:textSize="10sp"
+        android:textSize="8.5dp"
         android:visibility="gone" />
     <TextView
         android:id="@+id/chip2"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="10.5dp"
         android:layout_marginTop="1dp"
         android:background="@drawable/widget_chip_bg"
         android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:includeFontPadding="false"
         android:maxLines="1"
-        android:paddingStart="3dp"
-        android:paddingEnd="2dp"
+        android:paddingStart="2dp"
+        android:paddingEnd="1dp"
         android:textColor="#FFFFFFFF"
-        android:textSize="10sp"
+        android:textSize="8.5dp"
+        android:visibility="gone" />
+    <TextView
+        android:id="@+id/chip3"
+        android:layout_width="match_parent"
+        android:layout_height="10.5dp"
+        android:layout_marginTop="1dp"
+        android:background="@drawable/widget_chip_bg"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:paddingStart="2dp"
+        android:paddingEnd="1dp"
+        android:textColor="#FFFFFFFF"
+        android:textSize="8.5dp"
+        android:visibility="gone" />
+    <TextView
+        android:id="@+id/chip4"
+        android:layout_width="match_parent"
+        android:layout_height="10.5dp"
+        android:layout_marginTop="1dp"
+        android:background="@drawable/widget_chip_bg"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:paddingStart="2dp"
+        android:paddingEnd="1dp"
+        android:textColor="#FFFFFFFF"
+        android:textSize="8.5dp"
         android:visibility="gone" />
 </LinearLayout>

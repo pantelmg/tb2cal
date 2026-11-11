@@ -68,7 +68,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="#B3FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="11dp" />
         <TextView
             android:id="@+id/wd1"
             android:layout_width="0dp"
@@ -76,7 +76,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="#B3FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="11dp" />
         <TextView
             android:id="@+id/wd2"
             android:layout_width="0dp"
@@ -84,7 +84,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="#B3FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="11dp" />
         <TextView
             android:id="@+id/wd3"
             android:layout_width="0dp"
@@ -92,7 +92,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="#B3FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="11dp" />
         <TextView
             android:id="@+id/wd4"
             android:layout_width="0dp"
@@ -100,7 +100,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="#B3FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="11dp" />
         <TextView
             android:id="@+id/wd5"
             android:layout_width="0dp"
@@ -108,7 +108,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="#B3FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="11dp" />
         <TextView
             android:id="@+id/wd6"
             android:layout_width="0dp"
@@ -116,7 +116,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:textColor="#B3FFFFFF"
-            android:textSize="11sp" />
+            android:textSize="11dp" />
     </LinearLayout>
 
     <LinearLayout

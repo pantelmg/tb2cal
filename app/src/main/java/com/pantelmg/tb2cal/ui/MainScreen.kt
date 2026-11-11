@@ -185,7 +185,7 @@ fun MainScreen(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp)
     ) {
         // ---- Header ----
         Row(verticalAlignment = Alignment.Top) {
@@ -209,11 +209,12 @@ fun MainScreen(
             Column(horizontalAlignment = Alignment.End) {
                 IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                 Text(
-                    "Tip: Use the app's widgets for efficiency!",
+                    "Tip: Use the app's widgets\nfor efficiency!",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    softWrap = false,
+                    maxLines = 2,
                     modifier = Modifier
-                        .width(128.dp)
                         .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
@@ -327,8 +328,6 @@ fun MainScreen(
 
         if (shownMode == Mode.TIMER) {
             Spacer(Modifier.height(10.dp))
-            Text("Countdown:", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = shownH,
@@ -380,6 +379,9 @@ fun MainScreen(
         // ---- Clock: Takes the free space, so the buttons below always sit at the bottom ----
         // The digits are sized to the space that's left (and the caption drops out when it's tight),
         // so the clock is always drawn whole, whatever the screen, font size or cards above it.
+        // Gaps: 12dp everywhere around the clock and the buttons (the chips, segmented buttons and buttons
+        // already add 4–8dp of invisible touch area, so the spacers make up the rest).
+        Spacer(Modifier.height(if (shownMode == Mode.TIMER) 4.dp else 8.dp))
         BoxWithConstraints(
             Modifier
                 .weight(1f)
@@ -393,12 +395,13 @@ fun MainScreen(
             val byHeight = with(density) { (room / 1.2f).toSp() }.value
             val byWidth = with(density) { ((maxWidth - 32.dp) / 4.4f).toSp() }.value
             val clockSp = minOf(52f, byHeight, byWidth).coerceAtLeast(12f).sp
-            Card(Modifier.fillMaxWidth()) {
+            Card(Modifier.fillMaxSize()) {
                 Column(
                     Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .padding(vertical = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
                     Text(
                         clockText,
@@ -423,6 +426,7 @@ fun MainScreen(
         }
 
         // ---- Controls (same place in both modes) ----
+        Spacer(Modifier.height(8.dp))
         if (shownMode == Mode.STOPWATCH) {
             Button(
                 onClick = { if (Engine.complete(ctx) != null) onOpenCompletion() },

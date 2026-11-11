@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Build
+import android.os.Bundle
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import com.pantelmg.tb2cal.R
@@ -36,6 +38,12 @@ class MonthWidget : AppWidgetProvider() {
         ids.forEach { manager.updateAppWidget(it, build(context, it)) }
     }
 
+    /** Resized: Redraw, so the day cells fit the new size. */
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
+        Repo.init(context)
+        manager.updateAppWidget(id, build(context, id))
+    }
+
     override fun onDeleted(context: Context, ids: IntArray) {
         val e = prefs(context).edit()
         ids.forEach { e.remove(key(it)) }
@@ -62,8 +70,7 @@ class MonthWidget : AppWidgetProvider() {
         private const val ACTION_PREV = "com.pantelmg.tb2cal.month.PREV"
         private const val ACTION_NEXT = "com.pantelmg.tb2cal.month.NEXT"
         private const val ACTION_TODAY = "com.pantelmg.tb2cal.month.TODAY"
-        private const val MAX_CHIPS = 3
-        private val CHIP_IDS = intArrayOf(R.id.chip0, R.id.chip1, R.id.chip2)
+        private val CHIP_IDS = intArrayOf(R.id.chip0, R.id.chip1, R.id.chip2, R.id.chip3, R.id.chip4)
         private val WEEK_IDS = intArrayOf(R.id.week0, R.id.week1, R.id.week2, R.id.week3, R.id.week4, R.id.week5)
         private val WEEKDAY_IDS = intArrayOf(R.id.wd0, R.id.wd1, R.id.wd2, R.id.wd3, R.id.wd4, R.id.wd5, R.id.wd6)
         private const val DEFAULT_CHIP = 0xFF1565C0.toInt()
@@ -110,12 +117,18 @@ class MonthWidget : AppWidgetProvider() {
                 runCatching { CalendarData.byDay(ctx, gridStart, gridEnd) }.getOrDefault(emptyMap())
 
             // ---- 6 × 7 grid ----
+            // Height of one day cell (dp), from the widget's real size: Everything but the grid takes ~84dp (a little spare).
+            val heightDp = runCatching {
+                AppWidgetManager.getInstance(ctx).getAppWidgetOptions(widgetId)
+                    .getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+            }.getOrDefault(0)
+            val cellH = if (heightDp > 0) (heightDp - 84) / 6f else 0f
             for (w in 0 until 6) {
                 v.removeAllViews(WEEK_IDS[w])
                 for (d in 0 until 7) {
                     val index = w * 7 + d
                     val date = gridStart.plusDays(index.toLong())
-                    v.addView(WEEK_IDS[w], cell(ctx, widgetId, index, date, month, today, byDay[date].orEmpty()))
+                    v.addView(WEEK_IDS[w], cell(ctx, widgetId, index, date, month, today, byDay[date].orEmpty(), cellH))
                 }
             }
             return v
@@ -123,9 +136,28 @@ class MonthWidget : AppWidgetProvider() {
 
         private fun cell(
             ctx: Context, widgetId: Int, index: Int, date: LocalDate, month: LocalDate,
-            today: LocalDate, blocks: List<DayItem>,
+            today: LocalDate, blocks: List<DayItem>, cellH: Float,
         ): RemoteViews {
             val c = RemoteViews(ctx.packageName, R.layout.widget_month_cell)
+            // How many entries fit, from the real cell height: 3 at 4×5, 4 at 4×6, 5 at 4×7 (and larger).
+            // Android 12+ also sizes the day number and the entries to fill the cell evenly; Older versions
+            // keep the layout's sizes (17dp day row, 10.5dp entries).
+            val modern = Build.VERSION.SDK_INT >= 31 && cellH > 0f
+            val head = if (modern) (cellH * 0.3f).coerceIn(13f, 18f) else 17f
+            val count = if (cellH > 0f) ((cellH - 1f - head) / 11f).toInt().coerceIn(3, CHIP_IDS.size) else 3
+            if (modern) {
+                val dip = TypedValue.COMPLEX_UNIT_DIP
+                val chip = ((cellH - 1f - head) / count - 1f).coerceIn(8f, 15f)
+                c.setViewLayoutHeight(R.id.head, head, dip)
+                c.setViewLayoutWidth(R.id.day, head, dip)
+                c.setViewLayoutHeight(R.id.day, head, dip)
+                c.setTextViewTextSize(R.id.day, dip, head * 0.64f)
+                c.setTextViewTextSize(R.id.more, dip, chip * 0.85f)
+                CHIP_IDS.forEach { id ->
+                    c.setViewLayoutHeight(id, chip, dip)
+                    c.setTextViewTextSize(id, dip, chip * 0.8f)
+                }
+            }
             val inMonth = date.month == month.month && date.year == month.year
             c.setTextViewText(R.id.day, date.dayOfMonth.toString())
             if (date == today) {
@@ -136,7 +168,7 @@ class MonthWidget : AppWidgetProvider() {
                 c.setTextColor(R.id.day, if (inMonth) 0xFFFFFFFF.toInt() else 0x66FFFFFF)
             }
 
-            blocks.take(MAX_CHIPS).forEachIndexed { i, b ->
+            blocks.take(count).forEachIndexed { i, b ->
                 val id = CHIP_IDS[i]
                 c.setViewVisibility(id, View.VISIBLE)
                 c.setTextViewText(id, b.label)
@@ -150,10 +182,10 @@ class MonthWidget : AppWidgetProvider() {
                     c.setInt(id, "setBackgroundColor", color)
                 }
             }
-            if (blocks.size > MAX_CHIPS) {
+            if (blocks.size > count) {
                 // Next to the day number, so it never needs a row of its own.
                 c.setViewVisibility(R.id.more, View.VISIBLE)
-                c.setTextViewText(R.id.more, "+${blocks.size - MAX_CHIPS}")
+                c.setTextViewText(R.id.more, "+${blocks.size - count}")
             }
 
             // Tap a day → TB2Cal's Calendar tab, on that day.
