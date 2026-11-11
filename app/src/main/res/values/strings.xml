@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TB2Cal</string>
+    <string name="widget_desc">Start, pause and stop TimeBlocks from your home screen.</string>
+    <string name="month_widget_name">Calendar</string>
+    <string name="month_widget_desc">Month view of your completed TimeBlocks.</string>
+    <string name="manager_widget_name">TimeBlock manager</string>
+</resources>
