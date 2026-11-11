@@ -16,15 +16,18 @@ Use the app's widgets (Calendar and TimeBlock manager) for efficiency.
 - **Automatic registration:** Every completed TimeBlock (for example `1h20m study`) is saved the moment it finishes,
   in the app (Calendar and Statistics tabs) and in **TB2Cal's own calendar on the phone**, which your phone's
   calendar app shows. A TimeBlock can never be saved twice.
-- **Calendar tab:** Month view of your completed TimeBlocks. Tap a day to see its list.
-  **Sync with your Gmail** (off by default) also shows the events of the Gmail accounts on the phone, read-only.
-- **Statistics tab:** Daily, weekly and monthly totals per TimeBlock name, with a bin button to delete a sum.
+- **Calendar tab:** Month view of your completed TimeBlocks. Tap a day to see its list; The bin next to a TimeBlock
+  deletes it from the app and from TB2Cal's phone calendar. **Sync with your Gmail** (off by default) also shows the
+  events of the Gmail accounts on the phone, read-only.
+- **Statistics tab:** Daily, weekly and monthly totals per TimeBlock name, as a **List** (with a bin to delete a sum)
+  or a **Graph** (stacked columns per hour, day or day of the month).
+- Every tab fits on one page; Only the Calendar day list and the Statistics list scroll, when they're too long.
 
 ## Widgets
-- **TimeBlock manager (4×1):** App icon, TimeBlock choice (tap to cycle), T/S (tap to switch Timer/Stopwatch),
-  Start, Pause, Stop and, in Stopwatch mode, Complete.
+- **TimeBlock manager (4×1):** T/S (tap to switch Timer/Stopwatch), TimeBlock choice (tap to cycle), then Start,
+  Pause and Stop, always in the same place. In Stopwatch mode a boxed ✓ (Complete) appears left of Start.
 - **Calendar (resizable, 4×4 by default):** The same month view as the Calendar tab. ‹ › change month, tap the month
-  name for the current month, + opens TB2Cal, tap a day to open it in the app.
+  name for the current month, the TB icon opens TB2Cal, tap a day to open it in the app.
 
 ## Staying alive on Xiaomi and other strict phones
 - Foreground service with a permanent notification; An exact alarm-clock alarm for the timer end; A heartbeat alarm

@@ -169,8 +169,7 @@ fun MainScreen(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp)
     ) {
         // ---- Header ----
         Row(verticalAlignment = Alignment.Top) {
@@ -192,11 +191,16 @@ fun MainScreen(
             }
             IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             "Create TimeBlocks, with your own conditions, to track and improve productivity. " +
-                "Completed TimeBlocks are registered in the app and the local Calendar.\n" +
-                "Use the app's widgets (Calendar and TimeBlock manager) for efficiency.",
+                "Completed TimeBlocks are registered in the app and the local Calendar.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Use the app's widgets (Calendar and TimeBlock manager) for efficiency.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -204,13 +208,13 @@ fun MainScreen(
         // ---- Pending completion banner ----
         val unregistered = pending.filterNot { it.registered }
         if (unregistered.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
             Card(
                 onClick = onOpenCompletion,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text("TimeBlock completed!", fontWeight = FontWeight.SemiBold)
                     Text(
                         unregistered.joinToString(", ") { it.label } +
@@ -224,30 +228,29 @@ fun MainScreen(
 
         // ---- Background reliability nudge ----
         if (reliabilityIssues > 0 && !settings.hideReliabilityCard) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
             Card(
                 onClick = onOpenReliability,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
-                    Text("Keep TimeBlocks running", fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "$reliabilityIssues setting(s) may let ${Reliability.oemName} stop a running timer. Tap to fix.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    TextButton(
-                        onClick = { Repo.updateSettings { it.copy(hideReliabilityCard = true) } },
-                        modifier = Modifier.align(Alignment.End)
-                    ) { Text("Hide") }
+                Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Keep TimeBlocks running", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "$reliabilityIssues setting(s) may let ${Reliability.oemName} stop a running timer. Tap to fix.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    TextButton(onClick = { Repo.updateSettings { it.copy(hideReliabilityCard = true) } }) { Text("Hide") }
                 }
             }
         }
 
         // ---- Start a TimeBlock ----
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(14.dp))
         Text("Start a TimeBlock:", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             ExposedDropdownMenuBox(
                 expanded = menuOpen && !locked,
@@ -286,9 +289,9 @@ fun MainScreen(
         }
 
         // ---- TimeBlock mode ----
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
         Text("TimeBlock mode:", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             Mode.entries.forEachIndexed { i, md ->
                 SegmentedButton(
@@ -301,9 +304,9 @@ fun MainScreen(
         }
 
         if (shownMode == Mode.TIMER) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
             Text("Countdown:", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = shownH,
@@ -352,14 +355,19 @@ fun MainScreen(
             }
         }
 
-        // ---- Clock ----
-        Spacer(Modifier.height(20.dp))
+        // ---- Clock: Takes the free space, so the buttons below always sit at the bottom ----
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
         Card(Modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         clockText,
-                        fontSize = 56.sp,
+                        fontSize = 52.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center
@@ -373,8 +381,17 @@ fun MainScreen(
             }
         }
 
-        // ---- Controls ----
-        Spacer(Modifier.height(16.dp))
+        }
+
+        // ---- Controls (same place in both modes) ----
+        if (shownMode == Mode.STOPWATCH) {
+            Button(
+                onClick = { if (Engine.complete(ctx) != null) onOpenCompletion() },
+                enabled = locked,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("COMPLETE") }
+            Spacer(Modifier.height(4.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
@@ -404,15 +421,7 @@ fun MainScreen(
                 modifier = Modifier.weight(1f)
             ) { Text("STOP") }
         }
-        if (shownMode == Mode.STOPWATCH) {
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { if (Engine.complete(ctx) != null) onOpenCompletion() },
-                enabled = locked,
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("COMPLETE") }
-        }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
     }
 
     if (confirmStop) {

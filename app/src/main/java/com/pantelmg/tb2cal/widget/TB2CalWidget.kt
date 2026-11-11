@@ -22,7 +22,7 @@ import com.pantelmg.tb2cal.service.TimeblockService
 import com.pantelmg.tb2cal.ui.MainActivity
 
 /**
- * 4×1 home-screen widget: App icon · TimeBlock choice · T/S · Start · Pause · Stop (· Complete in Stopwatch mode).
+ * TimeBlock manager widget (4×1): T/S · TimeBlock choice · (✓ in Stopwatch mode) · Start · Pause · Stop.
  * After a completion it shows "Completed! Tap to register." until the block is in the calendar.
  */
 class TB2CalWidget : AppWidgetProvider() {
@@ -93,7 +93,6 @@ class TB2CalWidget : AppWidgetProvider() {
             v.setViewVisibility(R.id.controls, View.VISIBLE)
             v.setViewVisibility(R.id.completed, View.GONE)
             v.setOnClickPendingIntent(R.id.root, noop(ctx)) // Clears the "Tap to register" action
-            v.setOnClickPendingIntent(R.id.icon, Notifications.openApp(ctx, null, 20))
 
             // ---- TimeBlock choice + mode ----
             val blocks = Repo.blocks.value

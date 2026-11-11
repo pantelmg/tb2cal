@@ -140,6 +140,16 @@ object Repo {
         changed()
     }
 
+    /** Deletes one completed TimeBlock from the records (Calendar tab bin). */
+    fun removeHistoryEntry(name: String, startWallMs: Long) {
+        synchronized(lock) {
+            val list = history.value.filterNot { it.name == name && it.startWallMs == startWallMs }
+            history.value = list
+            writeList("history", list) { it.toJson() }
+        }
+        changed()
+    }
+
     private fun setPending(list: List<CompletedBlock>) {
         synchronized(lock) {
             pending.value = list

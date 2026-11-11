@@ -17,25 +17,38 @@ enum class Vibration(val label: String, val pattern: LongArray?, val repeats: Bo
     PULSE("Pulse until stopped", longArrayOf(0, 500, 300, 500, 300, 500, 1200), repeats = true),
 }
 
-/** The 11 standard calendar event colors (keys are their usual color ids). */
+/** The 11 preset calendar colors (keys are their usual color ids), plus custom "#RRGGBB" colors. */
 data class GColor(val key: String, val name: String, val argb: Long)
 
 object GoogleColors {
     val all = listOf(
-        GColor("1", "Lavender", 0xFF7986CB),
-        GColor("2", "Sage", 0xFF33B679),
-        GColor("3", "Grape", 0xFF8E24AA),
-        GColor("4", "Flamingo", 0xFFE67C73),
-        GColor("5", "Banana", 0xFFF6BF26),
-        GColor("6", "Tangerine", 0xFFF4511E),
-        GColor("7", "Peacock", 0xFF039BE5),
-        GColor("8", "Graphite", 0xFF616161),
-        GColor("9", "Blueberry", 0xFF3F51B5),
-        GColor("10", "Basil", 0xFF0B8043),
-        GColor("11", "Tomato", 0xFFD50000),
+        GColor("1", "Light purple", 0xFF7986CB),
+        GColor("2", "Green", 0xFF33B679),
+        GColor("3", "Purple", 0xFF8E24AA),
+        GColor("4", "Pink", 0xFFE67C73),
+        GColor("5", "Yellow", 0xFFF6BF26),
+        GColor("6", "Orange", 0xFFF4511E),
+        GColor("7", "Light blue", 0xFF039BE5),
+        GColor("8", "Gray", 0xFF616161),
+        GColor("9", "Blue", 0xFF3F51B5),
+        GColor("10", "Dark green", 0xFF0B8043),
+        GColor("11", "Red", 0xFFD50000),
     )
 
-    fun byKey(key: String?): GColor? = all.firstOrNull { it.key == key }
+    /** A preset key ("1".."11"), or a custom color saved as "#RRGGBB". */
+    fun byKey(key: String?): GColor? {
+        if (key == null) return null
+        if (key.startsWith("#")) {
+            val rgb = key.substring(1).toLongOrNull(16) ?: return null
+            return GColor(key, "Custom", 0xFF000000L or (rgb and 0xFFFFFFL))
+        }
+        return all.firstOrNull { it.key == key }
+    }
+
+    fun customKey(r: Int, g: Int, b: Int): String =
+        String.format(java.util.Locale.ROOT, "#%02X%02X%02X", r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
+
+    fun isCustom(key: String?) = key?.startsWith("#") == true
 }
 
 /** A selectable TimeBlock name with its calendar color (null = calendar default). */

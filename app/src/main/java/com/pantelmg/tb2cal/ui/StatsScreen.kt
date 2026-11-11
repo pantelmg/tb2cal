@@ -1,5 +1,11 @@
 package com.pantelmg.tb2cal.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -130,6 +136,7 @@ fun StatsScreen() {
     val history by Repo.history.collectAsState()
     var period by rememberSaveable { mutableStateOf(StatsPeriod.WEEKLY) }
     var offset by rememberSaveable { mutableIntStateOf(0) }
+    var graph by rememberSaveable { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<StatRow?>(null) }
     val requestedDay by StatsNav.day.collectAsState()
     LaunchedEffect(requestedDay) {
@@ -145,20 +152,20 @@ fun StatsScreen() {
     val total = rows.sumOf { it.totalMs }
     val max = rows.maxOfOrNull { it.totalMs } ?: 0L
 
+    // One page: Only the list (or the graph area) below the total takes the remaining space.
     Column(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text("Statistics", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+        Text("Statistics", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
             "Total time of completed TimeBlocks with the same name.",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
 
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             StatsPeriod.entries.forEachIndexed { i, p ->
@@ -173,7 +180,6 @@ fun StatsScreen() {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { offset-- }) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous")
@@ -189,23 +195,37 @@ fun StatsScreen() {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        // ---- Total + List/Graph switch ----
         Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    if (total > 0) Fmt.duration(total) else "0m",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    "Total · ${rows.sumOf { it.count }} TimeBlock(s)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (total > 0) Fmt.duration(total) else "0m",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Total · ${rows.sumOf { it.count }} TimeBlock(s)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                SingleChoiceSegmentedButtonRow {
+                    SegmentedButton(
+                        selected = !graph,
+                        onClick = { graph = false },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text("List") }
+                    SegmentedButton(
+                        selected = graph,
+                        onClick = { graph = true },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text("Graph") }
+                }
             }
         }
+        Spacer(Modifier.height(10.dp))
 
-        Spacer(Modifier.height(16.dp))
         if (rows.isEmpty()) {
             Text(
                 "No completed TimeBlocks in this period.",
@@ -213,43 +233,45 @@ fun StatsScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            rows.forEach { r ->
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ColorDot(r.colorKey, 14.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(r.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                        Text(
-                            "${r.count}×",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(Fmt.duration(r.totalMs), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        IconButton(onClick = { toDelete = r }) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Delete ${r.name}",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+        } else if (graph) {
+            StatsGraph(history, rows, period, start, end, Modifier.weight(1f).fillMaxWidth())
+        } else {
+            // Only this list scrolls, and only if it doesn't fit.
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(rows, key = { it.key }) { r ->
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ColorDot(r.colorKey, 14.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(r.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            Text(
+                                "${r.count}×",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(Modifier.width(12.dp))
+                            Text(Fmt.duration(r.totalMs), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            IconButton(onClick = { toDelete = r }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete ${r.name}",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
+                        val barColor = GoogleColors.byKey(r.colorKey)?.let { Color(it.argb) } ?: MaterialTheme.colorScheme.primary
+                        LinearProgressIndicator(
+                            progress = { if (max > 0) r.totalMs.toFloat() / max else 0f },
+                            color = barColor,
+                            strokeCap = StrokeCap.Round,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                        )
                     }
-                    Spacer(Modifier.height(6.dp))
-                    val barColor = GoogleColors.byKey(r.colorKey)?.let { Color(it.argb) } ?: MaterialTheme.colorScheme.primary
-                    LinearProgressIndicator(
-                        progress = { if (max > 0) r.totalMs.toFloat() / max else 0f },
-                        color = barColor,
-                        strokeCap = StrokeCap.Round,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                    )
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
     }
 
     toDelete?.let { r ->
@@ -272,5 +294,113 @@ fun StatsScreen() {
             },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel") } }
         )
+    }
+}
+
+
+/**
+ * Stacked columns: Daily = per hour, Weekly = per day, Monthly = per day of the month.
+ * Each column stacks the TimeBlock names in their colors; Legend underneath.
+ */
+@Composable
+private fun StatsGraph(
+    history: List<HistoryEntry>,
+    rows: List<StatRow>,
+    period: StatsPeriod,
+    start: LocalDate,
+    end: LocalDate,
+    modifier: Modifier,
+) {
+    val zone = ZoneId.systemDefault()
+    val locale = Locale.getDefault()
+    val n = when (period) {
+        StatsPeriod.DAILY -> 24
+        else -> (end.toEpochDay() - start.toEpochDay()).toInt()
+    }
+    // bucket index → (name key → minutes)
+    val buckets = remember(history, period, start, end) {
+        val out = List(n) { mutableMapOf<String, Long>() }
+        val from = epochMs(start)
+        val to = epochMs(end)
+        history.filter { it.startWallMs in from until to }.forEach { h ->
+            val t = java.time.Instant.ofEpochMilli(h.startWallMs).atZone(zone)
+            val i = when (period) {
+                StatsPeriod.DAILY -> t.hour
+                else -> (t.toLocalDate().toEpochDay() - start.toEpochDay()).toInt()
+            }.coerceIn(0, n - 1)
+            val k = h.name.trim().lowercase()
+            out[i][k] = (out[i][k] ?: 0L) + h.activeMs
+        }
+        out
+    }
+    val order = rows.map { it.key }
+    val colors = rows.associate { it.key to (GoogleColors.byKey(it.colorKey)?.let { c -> Color(c.argb) }) }
+    val fallback = MaterialTheme.colorScheme.primary
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    val maxMs = (buckets.maxOfOrNull { it.values.sum() } ?: 0L).coerceAtLeast(60_000L)
+
+    Column(modifier) {
+        Text(
+            "Highest: ${Fmt.duration(maxMs)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Canvas(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
+            for (f in listOf(0.25f, 0.5f, 0.75f, 1f)) {
+                val y = size.height * (1 - f)
+                drawLine(grid, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+            }
+            val gap = if (n > 12) 2.dp.toPx() else 6.dp.toPx()
+            val barW = (size.width - gap * (n - 1)) / n
+            buckets.forEachIndexed { i, b ->
+                var top = size.height
+                val x = i * (barW + gap)
+                order.forEach { k ->
+                    val v = b[k] ?: return@forEach
+                    val h = size.height * v / maxMs
+                    drawRect(colors[k] ?: fallback, topLeft = Offset(x, top - h), size = Size(barW, h))
+                    top -= h
+                }
+            }
+        }
+        // X labels: Every hour block of 6, every weekday, or every 7th day of the month.
+        Row(Modifier.fillMaxWidth()) {
+            for (i in 0 until n) {
+                val label = when (period) {
+                    StatsPeriod.DAILY -> if (i % 6 == 0) "$i" else ""
+                    StatsPeriod.WEEKLY -> start.plusDays(i.toLong()).dayOfWeek.getDisplayName(TextStyle.NARROW_STANDALONE, locale)
+                    StatsPeriod.MONTHLY -> if (i % 7 == 0) "${i + 1}" else ""
+                }
+                Text(
+                    label,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        // Legend
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            rows.forEach { r ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ColorDot(r.colorKey, 10.dp)
+                    Spacer(Modifier.width(4.dp))
+                    Text(r.name, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
     }
 }

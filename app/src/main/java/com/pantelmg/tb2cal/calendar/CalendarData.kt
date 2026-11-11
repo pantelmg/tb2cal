@@ -17,6 +17,8 @@ data class DayItem(
     val endMs: Long,
     val allDay: Boolean,
     val isTimeBlock: Boolean,
+    /** TimeBlocks only: Its name as recorded, used to delete exactly this one. */
+    val blockName: String? = null,
 )
 
 /**
@@ -44,7 +46,7 @@ object CalendarData {
             add(
                 Instant.ofEpochMilli(h.startWallMs).atZone(zone).toLocalDate(),
                 DayItem(label, GoogleColors.byKey(h.colorKey)?.argb?.toInt() ?: DEFAULT_COLOR,
-                    h.startWallMs, h.startWallMs + h.activeMs, allDay = false, isTimeBlock = true)
+                    h.startWallMs, h.startWallMs + h.activeMs, allDay = false, isTimeBlock = true, blockName = h.name)
             )
         }
 

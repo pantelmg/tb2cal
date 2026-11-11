@@ -101,6 +101,24 @@ object CalendarWriter {
         return uri?.let { ContentUris.parseId(it) } ?: error("The calendar rejected the event")
     }
 
+    /** Deletes a TimeBlock's event from TB2Cal's own calendar (only ever that calendar). Blocking. */
+    fun deleteFromLocal(ctx: Context, label: String, startMs: Long) {
+        val cal = localCalendar(ctx) ?: return
+        // As the calendar's owner ("sync adapter") the row is removed for good, not just marked deleted.
+        val uri = Events.CONTENT_URI.buildUpon()
+            .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT)
+            .appendQueryParameter(Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
+            .build()
+        runCatching {
+            ctx.contentResolver.delete(
+                uri,
+                "${Events.CALENDAR_ID}=? AND ${Events.TITLE}=? AND ${Events.DTSTART}=?",
+                arrayOf(cal.id.toString(), label, startMs.toString())
+            )
+        }
+    }
+
     /**
      * Events of every Gmail account on the phone between [fromMs] and [toMs], recurring ones
      * expanded. They come from the phone's own copy, kept up to date by Android's account sync.
