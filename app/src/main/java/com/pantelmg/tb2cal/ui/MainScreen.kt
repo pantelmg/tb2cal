@@ -71,6 +71,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.engine.Engine
@@ -356,31 +358,48 @@ fun MainScreen(
         }
 
         // ---- Clock: Takes the free space, so the buttons below always sit at the bottom ----
-        Box(
+        // The digits are sized to the space that's left (and the caption drops out when it's tight),
+        // so the clock is always drawn whole, whatever the screen, font size or cards above it.
+        BoxWithConstraints(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-        Card(Modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val density = LocalDensity.current
+            val captionH = with(density) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }
+            val showCaption = maxHeight >= captionH + 56.dp
+            val room = maxHeight - 20.dp - (if (showCaption) captionH else 0.dp)
+            val byHeight = with(density) { (room / 1.2f).toSp() }.value
+            val byWidth = with(density) { ((maxWidth - 32.dp) / 4.4f).toSp() }.value
+            val clockSp = minOf(52f, byHeight, byWidth).coerceAtLeast(12f).sp
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
                         clockText,
-                        fontSize = 52.sp,
+                        fontSize = clockSp,
+                        lineHeight = clockSp * 1.2f,
+                        maxLines = 1,
+                        softWrap = false,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center
                     )
-                    Text(
-                        clockCaption,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (showCaption) {
+                        Text(
+                            clockCaption,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
-        }
-
         }
 
         // ---- Controls (same place in both modes) ----

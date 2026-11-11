@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -187,8 +189,18 @@ fun CalendarScreen() {
         }
 
         // ---- 6 × 7 grid: Fills the top part of the page ----
+        // Each cell: Day number (with +N at the right when more) on top, then up to 3 TimeBlocks/events.
+        // Sizes come from the cell height (not the phone's font size), so all of it always fits.
         val line = MaterialTheme.colorScheme.outlineVariant
-        Column(Modifier.weight(0.62f).fillMaxWidth()) {
+        BoxWithConstraints(Modifier.weight(0.66f).fillMaxWidth()) {
+        val density = LocalDensity.current
+        val cellH = maxHeight / 6
+        val headH = (cellH * 0.3f).coerceIn(12.dp, 20.dp)
+        val chipH = ((cellH - headH - 2.dp) / 3).coerceIn(7.dp, 16.dp)
+        val chipLine = with(density) { (chipH - 1.dp).toSp() }
+        val chipFont = with(density) { ((chipH - 1.dp) * 0.82f).toSp() }
+        val headFont = with(density) { (headH * 0.62f).toSp() }
+        Column(Modifier.fillMaxSize()) {
             for (w in 0 until 6) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     for (d in 0 until 7) {
@@ -206,46 +218,60 @@ fun CalendarScreen() {
                                 .padding(1.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Box(
-                                Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(if (date == today) MaterialTheme.colorScheme.primary else Color.Transparent),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    date.dayOfMonth.toString(),
-                                    fontSize = 11.sp,
-                                    color = when {
-                                        date == today -> MaterialTheme.colorScheme.onPrimary
-                                        inMonth -> MaterialTheme.colorScheme.onSurface
-                                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                    }
-                                )
+                            Box(Modifier.fillMaxWidth().height(headH)) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.Center)
+                                        .size(headH)
+                                        .clip(CircleShape)
+                                        .background(if (date == today) MaterialTheme.colorScheme.primary else Color.Transparent),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        date.dayOfMonth.toString(),
+                                        fontSize = headFont,
+                                        lineHeight = headFont,
+                                        maxLines = 1,
+                                        color = when {
+                                            date == today -> MaterialTheme.colorScheme.onPrimary
+                                            inMonth -> MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                        }
+                                    )
+                                }
+                                if (items.size > 3) {
+                                    Text(
+                                        "+${items.size - 3}",
+                                        fontSize = chipFont,
+                                        lineHeight = chipFont,
+                                        maxLines = 1,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 1.dp)
+                                    )
+                                }
                             }
-                            items.take(2).forEach { item ->
+                            items.take(3).forEach { item ->
                                 Text(
                                     item.label,
-                                    fontSize = 9.sp,
-                                    lineHeight = 11.sp,
+                                    fontSize = chipFont,
+                                    lineHeight = chipLine,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     color = Color.White,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 1.dp)
+                                        .height(chipH - 1.dp)
                                         .clip(RoundedCornerShape(3.dp))
                                         .background(Color(item.color).copy(alpha = if (inMonth) 1f else 0.5f))
                                         .padding(horizontal = 2.dp)
                                 )
                             }
-                            if (items.size > 2) {
-                                Text("+${items.size - 2}", fontSize = 9.sp, lineHeight = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
                         }
                     }
                 }
             }
+        }
         }
 
         // ---- Chosen day ----
@@ -259,7 +285,7 @@ fun CalendarScreen() {
             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
         )
         // Only this list scrolls (and only if it doesn't fit).
-        LazyColumn(Modifier.weight(0.38f).fillMaxWidth()) {
+        LazyColumn(Modifier.weight(0.34f).fillMaxWidth()) {
             if (dayItems.isEmpty()) {
                 item {
                     Text(
