@@ -10,7 +10,7 @@ events from your Google account, export TimeBlock statistics for a given time pe
 - **Your list:** `study` and `workout` to start with. Add, rename and remove TimeBlocks, each with a color: 11 presets
   or any **Custom color…** (pick from the color grid or type R, G, B).
 - **Two modes:** **Timer** counts down from the hours and minutes you set (or a preset); **Stopwatch** counts up until
-  you tap COMPLETE.
+  you tap COMPLETE. Each TimeBlock remembers its own countdown as soon as you change it, also for the widget.
 - **Controls:** START locks every option; PAUSE/RESUME keeps them locked; STOP discards the TimeBlock and unlocks them.
   The buttons stay in the same place in both modes.
 - **Permanent notification** while a TimeBlock runs: Name, mode and live time, with Pause/Resume, Stop (and Complete in
@@ -42,7 +42,8 @@ Every tab fits on one page; Only the Calendar day list and the Statistics list s
   then Start, Pause and Stop, always in the same place. In Stopwatch mode a boxed ✓ (Complete) appears left of Start.
   Buttons that can't be used do nothing.
 - **Calendar (resizable, 4×4 by default):** The same month view as the Calendar tab. ‹ › change month, tap the month
-  name for the current month, the TB icon opens TB2Cal, tap a day to open it in the app.
+  name for the current month, the TB icon opens TB2Cal, tap a day to open it in the app. Each day shows up to 3
+  entries, with +N next to the day number when there are more.
 
 ## Staying alive on Xiaomi and other strict phones
 - Foreground service with a permanent notification; An exact alarm-clock alarm for the timer end; A heartbeat alarm

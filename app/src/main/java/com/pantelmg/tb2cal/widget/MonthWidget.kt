@@ -151,6 +151,7 @@ class MonthWidget : AppWidgetProvider() {
                 }
             }
             if (blocks.size > MAX_CHIPS) {
+                // Next to the day number, so it never needs a row of its own.
                 c.setViewVisibility(R.id.more, View.VISIBLE)
                 c.setTextViewText(R.id.more, "+${blocks.size - MAX_CHIPS}")
             }

@@ -52,12 +52,12 @@ class TimeblockService : Service() {
         return START_STICKY
     }
 
-    /** Widget START: Uses the TimeBlock, mode and duration last chosen in the app or widget. */
+    /** Widget START: Uses the TimeBlock and mode last chosen in the app or widget, with that TimeBlock's own countdown. */
     private fun startFromSettings() {
         val st = Repo.settings.value
         val blocks = Repo.blocks.value
         val block = blocks.firstOrNull { it.id == st.lastBlockId } ?: blocks.firstOrNull() ?: return
-        Engine.start(this, block, st.lastMode, (st.timerH * 60L + st.timerM) * 60_000L)
+        Engine.start(this, block, st.lastMode, st.timerMinutes(block.id) * 60_000L)
     }
 
     private fun render(s: Session) {

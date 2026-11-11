@@ -71,6 +71,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
@@ -107,8 +109,11 @@ fun MainScreen(
     // TimeBlock choice and mode live in settings, so the app and the widget always agree.
     val selected = blocks.firstOrNull { it.id == settings.lastBlockId } ?: blocks.firstOrNull()
     val mode = settings.lastMode
-    var hours by rememberSaveable { mutableStateOf(settings.timerH.toString()) }
-    var minutes by rememberSaveable { mutableStateOf(settings.timerM.toString()) }
+    // Each TimeBlock keeps its own countdown: The fields reload when another TimeBlock is chosen
+    // (here or on the widget), and every change is saved for that TimeBlock right away.
+    val savedMin = settings.timerMinutes(selected?.id)
+    var hours by rememberSaveable(selected?.id) { mutableStateOf((savedMin / 60).toString()) }
+    var minutes by rememberSaveable(selected?.id) { mutableStateOf((savedMin % 60).toString()) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmStop by remember { mutableStateOf(false) }
 
@@ -132,11 +137,20 @@ fun MainScreen(
         }
     }
 
+    /** Saves the selected TimeBlock's countdown; A null part keeps its saved value. */
+    fun saveTimer(newH: Int?, newM: Int?) {
+        val id = selected?.id ?: return
+        Repo.updateSettings { s ->
+            val cur = s.timerMinutes(id)
+            val total = (newH ?: (cur / 60)) * 60 + (newM ?: (cur % 60))
+            s.copy(blockTimers = s.blockTimers + (id to total))
+        }
+    }
+
     fun startNow() {
         val b = selected ?: return
-        Repo.updateSettings {
-            it.copy(lastBlockId = b.id, timerH = h ?: 0, timerM = m ?: 0)
-        }
+        Repo.updateSettings { it.copy(lastBlockId = b.id) }
+        if (mode == Mode.TIMER) saveTimer(h, m)
         Engine.start(ctx, b, mode, targetMs)
         TimeblockService.ensureRunning(ctx)
     }
@@ -191,18 +205,24 @@ fun MainScreen(
                         .clickable { uriHandler.openUri("https://github.com/pantelmg") }
                 )
             }
-            IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+            // Settings gear, with the widget tip in a small outlined box under it.
+            Column(horizontalAlignment = Alignment.End) {
+                IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+                Text(
+                    "Tip: Use the app's widgets for efficiency!",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .width(128.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Text(
             "Create TimeBlocks, with your own conditions, to track and improve productivity. " +
                 "Completed TimeBlocks are registered in the app and the local Calendar.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Use the app's widgets (Calendar and TimeBlock manager) for efficiency.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -314,7 +334,7 @@ fun MainScreen(
                     value = shownH,
                     onValueChange = { v ->
                         hours = v.filter(Char::isDigit).take(2)
-                        hours.toIntOrNull()?.takeIf { it in 0..23 }?.let { n -> Repo.updateSettings { it.copy(timerH = n) } }
+                        hours.toIntOrNull()?.takeIf { it in 0..23 }?.let { n -> saveTimer(n, null) }
                     },
                     label = { Text("Hours") },
                     enabled = !locked,
@@ -327,7 +347,7 @@ fun MainScreen(
                     value = shownM,
                     onValueChange = { v ->
                         minutes = v.filter(Char::isDigit).take(2)
-                        minutes.toIntOrNull()?.takeIf { it in 0..59 }?.let { n -> Repo.updateSettings { it.copy(timerM = n) } }
+                        minutes.toIntOrNull()?.takeIf { it in 0..59 }?.let { n -> saveTimer(null, n) }
                     },
                     label = { Text("Minutes") },
                     enabled = !locked,
@@ -348,7 +368,7 @@ fun MainScreen(
                         onClick = {
                             hours = (mins / 60).toString()
                             minutes = (mins % 60).toString()
-                            Repo.updateSettings { it.copy(timerH = mins / 60, timerM = mins % 60) }
+                            saveTimer(mins / 60, mins % 60)
                         },
                         enabled = !locked,
                         label = { Text(Fmt.duration(mins * 60_000L)) }

@@ -172,8 +172,11 @@ data class Settings(
     /** True: Play at the media volume. False: Play at the notification volume. */
     val useMediaVolume: Boolean = false,
     val calendarId: Long = -1,
+    /** Default countdown, for TimeBlocks without one of their own yet. */
     val timerH: Int = 0,
     val timerM: Int = 25,
+    /** Each TimeBlock's own countdown (TimeBlock id → minutes), saved as soon as it's changed. */
+    val blockTimers: Map<String, Int> = emptyMap(),
     val lastBlockId: String? = null,
     val lastMode: Mode = Mode.TIMER,
     val channelVersion: Int = 0,
@@ -193,6 +196,9 @@ data class Settings(
     /** First-launch permission prompt already shown. */
     val permissionsAsked: Boolean = false,
 ) {
+    /** Countdown minutes of a TimeBlock: Its own, or the default. */
+    fun timerMinutes(blockId: String?): Int = blockId?.let { blockTimers[it] } ?: (timerH * 60 + timerM)
+
     fun toJson(): JSONObject = JSONObject()
         .put("vib", vibration.name).put("sound", soundUri).put("soundTitle", soundTitle).put("media", useMediaVolume).put("cal", calendarId)
         .put("h", timerH).put("m", timerM).put("lastBlock", lastBlockId ?: "")
@@ -202,6 +208,7 @@ data class Settings(
         .put("ackCalSync", ackCalendarSync)
         .put("ackCalAuto", ackCalendarAutostart).put("ackCalData", ackCalendarData).put("permAsked", permissionsAsked).put("autoReg", autoRegister)
         .put("gmailView", gmailView)
+        .put("timers", JSONObject().also { j -> blockTimers.forEach { (k, v) -> j.put(k, v) } })
 
     companion object {
         fun fromJson(o: JSONObject) = Settings(
@@ -224,6 +231,9 @@ data class Settings(
             ackCalendarData = o.optBoolean("ackCalData"),
             autoRegister = true,
             gmailView = o.optBoolean("gmailView"),
+            blockTimers = o.optJSONObject("timers")?.let { j ->
+                j.keys().asSequence().associateWith { k -> j.optInt(k) }
+            } ?: emptyMap(),
             permissionsAsked = o.optBoolean("permAsked"),
         )
     }

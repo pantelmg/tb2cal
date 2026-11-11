@@ -10,14 +10,31 @@
     android:paddingTop="2dp"
     android:paddingEnd="1dp">
 
-    <TextView
-        android:id="@+id/day"
-        android:layout_width="22dp"
-        android:layout_height="22dp"
-        android:layout_gravity="center_horizontal"
-        android:gravity="center"
-        android:textColor="#FFFFFFFF"
-        android:textSize="12sp" />
+    <!-- Day number in the middle, +N (more than 3) at the right of it. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="22dp">
+
+        <TextView
+            android:id="@+id/day"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/more"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="1dp"
+            android:maxLines="1"
+            android:textColor="#B3FFFFFF"
+            android:textSize="10sp"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/chip0"
@@ -56,16 +73,6 @@
         android:paddingStart="3dp"
         android:paddingEnd="2dp"
         android:textColor="#FFFFFFFF"
-        android:textSize="10sp"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/more"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:maxLines="1"
-        android:textColor="#B3FFFFFF"
         android:textSize="10sp"
         android:visibility="gone" />
 </LinearLayout>

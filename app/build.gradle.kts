@@ -12,10 +12,11 @@ android {
         applicationId = "com.pantelmg.tb2cal"
         minSdk = 26
         targetSdk = 35
-        // Each GitHub Actions run gets a higher versionCode, so new APKs install over old ones.
-        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionCode = run
-        versionName = "1.0.$run"
+        // versionCode = Minutes since 1 Jan 2024 (UTC): Every newer build, on GitHub or on a PC, is higher,
+        // so it always installs over the old one.
+        versionCode = (System.currentTimeMillis() / 60_000L - 28_401_120L).toInt()
+        val run = System.getenv("GITHUB_RUN_NUMBER")
+        versionName = if (run != null) "1.0.$run" else "1.0.pc"
     }
 
     // Fixed key, so every build has the same signature and updates install in place.

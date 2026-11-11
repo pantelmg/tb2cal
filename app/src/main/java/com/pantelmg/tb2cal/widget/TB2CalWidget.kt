@@ -100,7 +100,7 @@ class TB2CalWidget : AppWidgetProvider() {
             val name = if (s.active) s.blockName else chosen?.name ?: "—"
             val colorKey = if (s.active) s.colorKey else chosen?.colorKey
             val mode = if (s.active) s.mode else st.lastMode
-            val targetMs = (st.timerH * 60L + st.timerM) * 60_000L
+            val targetMs = st.timerMinutes(chosen?.id) * 60_000L
 
             v.setTextViewText(R.id.name, name)
             val color = GoogleColors.byKey(colorKey)
