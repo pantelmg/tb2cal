@@ -5,6 +5,7 @@ By [github.com/pantelmg](https://github.com/pantelmg)
 Create TimeBlocks, with your own conditions, to track and improve productivity.
 Completed TimeBlocks are registered in the app and the local Calendar.
 Use the app's widgets (Calendar and TimeBlock manager) for efficiency.
+Bonus: Import events from your Google account, export TimeBlock statistics for a given time period to PDF.
 
 ## Features
 - **TimeBlocks:** A list (`study`, `workout` preset). Add, rename and remove them, each with a calendar color.
