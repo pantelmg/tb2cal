@@ -1,5 +1,13 @@
 package com.pantelmg.tb2cal.ui
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import java.time.format.TextStyle
 import androidx.compose.ui.unit.dp
 import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.model.Fmt
@@ -69,9 +78,9 @@ object StatsNav {
     val day = kotlinx.coroutines.flow.MutableStateFlow<Long?>(null)
 }
 
-enum class StatsPeriod(val label: String) { DAILY("Daily"), WEEKLY("Weekly"), MONTHLY("Monthly") }
+enum class StatsPeriod(val label: String) { DAILY("Daily"), WEEKLY("Weekly"), MONTHLY("Monthly"), YEARLY("Yearly") }
 
-private data class StatRow(val key: String, val name: String, val colorKey: String?, val totalMs: Long, val count: Int)
+internal data class StatRow(val key: String, val name: String, val colorKey: String?, val totalMs: Long, val count: Int)
 
 /** Start (inclusive) and end (exclusive) dates of the period [offset] steps from now. */
 private fun range(p: StatsPeriod, offset: Int): Pair<LocalDate, LocalDate> {
@@ -83,6 +92,7 @@ private fun range(p: StatsPeriod, offset: Int): Pair<LocalDate, LocalDate> {
             today.with(wf.dayOfWeek(), 1).plusWeeks(offset.toLong()).let { it to it.plusWeeks(1) }
         }
         StatsPeriod.MONTHLY -> today.withDayOfMonth(1).plusMonths(offset.toLong()).let { it to it.plusMonths(1) }
+        StatsPeriod.YEARLY -> today.withDayOfYear(1).plusYears(offset.toLong()).let { it to it.plusYears(1) }
     }
 }
 
@@ -111,12 +121,44 @@ private fun title(p: StatsPeriod, offset: Int, start: LocalDate, end: LocalDate)
                 else -> m
             }
         }
+        StatsPeriod.YEARLY -> when (offset) {
+            0 -> "This year · ${start.year}"
+            -1 -> "Last year · ${start.year}"
+            else -> "${start.year}"
+        }
     }
 }
 
-/** Sums same-name TimeBlocks (case and spacing ignored) that started inside the period. */
-private fun epochMs(d: LocalDate) = d.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+internal fun epochMs(d: LocalDate) = d.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
+/** Graph columns: Daily = 24 hours, Weekly/Monthly = days, Yearly = 12 months. */
+internal fun statsBucketCount(p: StatsPeriod, start: LocalDate, end: LocalDate): Int = when (p) {
+    StatsPeriod.DAILY -> 24
+    StatsPeriod.YEARLY -> 12
+    else -> (end.toEpochDay() - start.toEpochDay()).toInt()
+}
+
+/** Column index → (name key → total ms) for the TimeBlocks that started inside the period. */
+internal fun statsBuckets(history: List<HistoryEntry>, p: StatsPeriod, start: LocalDate, end: LocalDate): List<Map<String, Long>> {
+    val zone = ZoneId.systemDefault()
+    val n = statsBucketCount(p, start, end)
+    val out = List(n) { mutableMapOf<String, Long>() }
+    val from = epochMs(start)
+    val to = epochMs(end)
+    history.filter { it.startWallMs in from until to }.forEach { h ->
+        val t = java.time.Instant.ofEpochMilli(h.startWallMs).atZone(zone)
+        val i = when (p) {
+            StatsPeriod.DAILY -> t.hour
+            StatsPeriod.YEARLY -> t.monthValue - 1
+            else -> (t.toLocalDate().toEpochDay() - start.toEpochDay()).toInt()
+        }.coerceIn(0, n - 1)
+        val k = h.name.trim().lowercase()
+        out[i][k] = (out[i][k] ?: 0L) + h.activeMs
+    }
+    return out
+}
+
+/** Sums same-name TimeBlocks (case and spacing ignored) that started inside the period. */
 private fun summarize(history: List<HistoryEntry>, start: LocalDate, end: LocalDate): List<StatRow> {
     val from = epochMs(start)
     val to = epochMs(end)
@@ -152,6 +194,26 @@ fun StatsScreen() {
     val total = rows.sumOf { it.totalMs }
     val max = rows.maxOfOrNull { it.totalMs } ?: 0L
 
+    // Export: The user picks where to save; The graph of the selected period is written as a PDF.
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val exportPdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null) {
+            val snapshot = history
+            val p = period
+            val t = title(period, offset, start, end)
+            val s0 = start
+            val e0 = end
+            val r0 = rows
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    runCatching { StatsPdf.write(ctx, uri, snapshot, r0, p, t, s0, e0) }.isSuccess
+                }
+                Toast.makeText(ctx, if (ok) "PDF saved." else "Couldn't save the PDF.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // One page: Only the list (or the graph area) below the total takes the remaining space.
     Column(
         Modifier
@@ -159,7 +221,18 @@ fun StatsScreen() {
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text("Statistics", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Statistics",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = { exportPdf.launch(StatsPdf.fileName(period, start, end)) },
+                enabled = rows.isNotEmpty()
+            ) { Text("Export PDF") }
+        }
         Text(
             "Total time of completed TimeBlocks with the same name.",
             style = MaterialTheme.typography.bodySmall,
@@ -175,8 +248,9 @@ fun StatsScreen() {
                         period = p
                         offset = 0
                     },
-                    shape = SegmentedButtonDefaults.itemShape(index = i, count = StatsPeriod.entries.size)
-                ) { Text(p.label) }
+                    shape = SegmentedButtonDefaults.itemShape(index = i, count = StatsPeriod.entries.size),
+                    icon = {}
+                ) { Text(p.label, maxLines = 1) }
             }
         }
 
@@ -299,7 +373,7 @@ fun StatsScreen() {
 
 
 /**
- * Stacked columns: Daily = per hour, Weekly = per day, Monthly = per day of the month.
+ * Stacked columns: Daily = per hour, Weekly = per day, Monthly = per day of the month, Yearly = per month.
  * Each column stacks the TimeBlock names in their colors; Legend underneath.
  */
 @Composable
@@ -311,28 +385,9 @@ private fun StatsGraph(
     end: LocalDate,
     modifier: Modifier,
 ) {
-    val zone = ZoneId.systemDefault()
     val locale = Locale.getDefault()
-    val n = when (period) {
-        StatsPeriod.DAILY -> 24
-        else -> (end.toEpochDay() - start.toEpochDay()).toInt()
-    }
-    // bucket index → (name key → minutes)
-    val buckets = remember(history, period, start, end) {
-        val out = List(n) { mutableMapOf<String, Long>() }
-        val from = epochMs(start)
-        val to = epochMs(end)
-        history.filter { it.startWallMs in from until to }.forEach { h ->
-            val t = java.time.Instant.ofEpochMilli(h.startWallMs).atZone(zone)
-            val i = when (period) {
-                StatsPeriod.DAILY -> t.hour
-                else -> (t.toLocalDate().toEpochDay() - start.toEpochDay()).toInt()
-            }.coerceIn(0, n - 1)
-            val k = h.name.trim().lowercase()
-            out[i][k] = (out[i][k] ?: 0L) + h.activeMs
-        }
-        out
-    }
+    val n = statsBucketCount(period, start, end)
+    val buckets = remember(history, period, start, end) { statsBuckets(history, period, start, end) }
     val order = rows.map { it.key }
     val colors = rows.associate { it.key to (GoogleColors.byKey(it.colorKey)?.let { c -> Color(c.argb) }) }
     val fallback = MaterialTheme.colorScheme.primary
@@ -368,13 +423,14 @@ private fun StatsGraph(
                 }
             }
         }
-        // X labels: Every hour block of 6, every weekday, or every 7th day of the month.
+        // X labels: Every 6th hour, every weekday, every 7th day of the month, or every month.
         Row(Modifier.fillMaxWidth()) {
             for (i in 0 until n) {
                 val label = when (period) {
                     StatsPeriod.DAILY -> if (i % 6 == 0) "$i" else ""
                     StatsPeriod.WEEKLY -> start.plusDays(i.toLong()).dayOfWeek.getDisplayName(TextStyle.NARROW_STANDALONE, locale)
                     StatsPeriod.MONTHLY -> if (i % 7 == 0) "${i + 1}" else ""
+                    StatsPeriod.YEARLY -> java.time.Month.of(i + 1).getDisplayName(TextStyle.NARROW, locale)
                 }
                 Text(
                     label,
