@@ -208,7 +208,18 @@ data class Settings(
     val gmailView: Boolean = false,
     /** First-launch permission prompt already shown. */
     val permissionsAsked: Boolean = false,
+    /** Countdown presets on the main screen (minutes, ascending). */
+    val presets: List<Int> = DEFAULT_PRESETS,
+    /** Calendar tab and widget: Merge same-name TimeBlocks of a day into one total. */
+    val tbTotal: Boolean = false,
+    /** Statistics tab: Last period (DAILY, WEEKLY, MONTHLY, YEARLY) and Graph instead of List. */
+    val statsPeriod: String = "WEEKLY",
+    val statsGraph: Boolean = false,
+    /** Goals tab: Last period, and the periods whose new goals repeat from then on ("Apply onward"). */
+    val goalsPeriod: String = "WEEKLY",
+    val applyOnward: Set<String> = emptySet(),
 ) {
+
     /** Countdown minutes of a TimeBlock: Its own, or the default. */
     fun timerMinutes(blockId: String?): Int = blockId?.let { blockTimers[it] } ?: (timerH * 60 + timerM)
 
@@ -222,8 +233,14 @@ data class Settings(
         .put("ackCalAuto", ackCalendarAutostart).put("ackCalData", ackCalendarData).put("permAsked", permissionsAsked).put("autoReg", autoRegister)
         .put("gmailView", gmailView)
         .put("timers", JSONObject().also { j -> blockTimers.forEach { (k, v) -> j.put(k, v) } })
+        .put("presets", org.json.JSONArray().also { a -> presets.forEach { a.put(it) } })
+        .put("tbTotal", tbTotal).put("statsPeriod", statsPeriod).put("statsGraph", statsGraph)
+        .put("goalsPeriod", goalsPeriod)
+        .put("onward", org.json.JSONArray().also { a -> applyOnward.forEach { a.put(it) } })
 
     companion object {
+        val DEFAULT_PRESETS = listOf(15, 25, 45, 60, 90, 120)
+
         fun fromJson(o: JSONObject) = Settings(
             vibration = runCatching { Vibration.valueOf(o.getString("vib")) }.getOrDefault(Vibration.PULSE),
             soundUri = if (o.has("sound")) o.getString("sound") else null,
@@ -247,6 +264,13 @@ data class Settings(
             blockTimers = o.optJSONObject("timers")?.let { j ->
                 j.keys().asSequence().associateWith { k -> j.optInt(k) }
             } ?: emptyMap(),
+            presets = o.optJSONArray("presets")?.let { a -> List(a.length()) { a.optInt(it) }.filter { it > 0 } }
+                ?.takeIf { it.isNotEmpty() } ?: DEFAULT_PRESETS,
+            tbTotal = o.optBoolean("tbTotal"),
+            statsPeriod = o.optString("statsPeriod").ifEmpty { "WEEKLY" },
+            statsGraph = o.optBoolean("statsGraph"),
+            goalsPeriod = o.optString("goalsPeriod").ifEmpty { "WEEKLY" },
+            applyOnward = o.optJSONArray("onward")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
             permissionsAsked = o.optBoolean("permAsked"),
         )
     }
@@ -269,5 +293,38 @@ object Fmt {
     fun clock(ms: Long, roundUp: Boolean = false): String {
         val s = if (roundUp) (ms + 999) / 1000 else ms / 1000
         return String.format(Locale.ROOT, "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+    }
+}
+
+/**
+ * A goal for one TimeBlock name (key: Trimmed, lowercase) and one period type (DAILY, WEEKLY, MONTHLY, YEARLY),
+ * set in the period that starts on [startDay] (epoch day). [onward]: Also applies to every later period of that
+ * type, until another onward goal is set. [minutes] 0 = no goal.
+ */
+data class Goal(val period: String, val nameKey: String, val startDay: Long, val minutes: Int, val onward: Boolean) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("p", period).put("n", nameKey).put("s", startDay).put("m", minutes).put("o", onward)
+
+    companion object {
+        fun fromJson(o: JSONObject) = Goal(
+            o.getString("p"), o.getString("n"), o.getLong("s"), o.getInt("m"), o.optBoolean("o")
+        )
+
+        /** Goal minutes for a name in the period starting on [startDay]: Its own one-off goal, else the latest onward one. */
+        fun resolve(list: List<Goal>, period: String, nameKey: String, startDay: Long): Int {
+            val mine = list.filter { it.period == period && it.nameKey == nameKey }
+            mine.firstOrNull { !it.onward && it.startDay == startDay }?.let { return it.minutes }
+            return mine.filter { it.onward && it.startDay <= startDay }.maxByOrNull { it.startDay }?.minutes ?: 0
+        }
+
+        /**
+         * Sets a goal. One-off: Only for that period. Onward: From that period on, replacing onward goals set for
+         * later periods (one-off goals of later periods stay).
+         */
+        fun set(list: List<Goal>, period: String, nameKey: String, startDay: Long, minutes: Int, onward: Boolean): List<Goal> =
+            list.filterNot {
+                it.period == period && it.nameKey == nameKey &&
+                    ((!it.onward && it.startDay == startDay) || (onward && it.onward && it.startDay >= startDay))
+            } + Goal(period, nameKey, startDay, minutes, onward)
     }
 }

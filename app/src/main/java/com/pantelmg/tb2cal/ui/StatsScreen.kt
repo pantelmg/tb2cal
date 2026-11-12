@@ -83,7 +83,7 @@ enum class StatsPeriod(val label: String) { DAILY("Daily"), WEEKLY("Weekly"), MO
 internal data class StatRow(val key: String, val name: String, val colorKey: String?, val totalMs: Long, val count: Int)
 
 /** Start (inclusive) and end (exclusive) dates of the period [offset] steps from now. */
-private fun range(p: StatsPeriod, offset: Int): Pair<LocalDate, LocalDate> {
+internal fun range(p: StatsPeriod, offset: Int): Pair<LocalDate, LocalDate> {
     val today = LocalDate.now()
     return when (p) {
         StatsPeriod.DAILY -> today.plusDays(offset.toLong()).let { it to it.plusDays(1) }
@@ -96,7 +96,7 @@ private fun range(p: StatsPeriod, offset: Int): Pair<LocalDate, LocalDate> {
     }
 }
 
-private fun title(p: StatsPeriod, offset: Int, start: LocalDate, end: LocalDate): String {
+internal fun title(p: StatsPeriod, offset: Int, start: LocalDate, end: LocalDate): String {
     val loc = Locale.getDefault()
     return when (p) {
         StatsPeriod.DAILY -> when (offset) {
@@ -159,7 +159,7 @@ internal fun statsBuckets(history: List<HistoryEntry>, p: StatsPeriod, start: Lo
 }
 
 /** Sums same-name TimeBlocks (case and spacing ignored) that started inside the period. */
-private fun summarize(history: List<HistoryEntry>, start: LocalDate, end: LocalDate): List<StatRow> {
+internal fun summarize(history: List<HistoryEntry>, start: LocalDate, end: LocalDate): List<StatRow> {
     val from = epochMs(start)
     val to = epochMs(end)
     return history
@@ -176,14 +176,18 @@ private fun summarize(history: List<HistoryEntry>, start: LocalDate, end: LocalD
 @Composable
 fun StatsScreen() {
     val history by Repo.history.collectAsState()
-    var period by rememberSaveable { mutableStateOf(StatsPeriod.WEEKLY) }
+    val settings by Repo.settings.collectAsState()
+    // Period and List/Graph are remembered (saved in the settings).
+    val period = runCatching { StatsPeriod.valueOf(settings.statsPeriod) }.getOrDefault(StatsPeriod.WEEKLY)
+    val graph = settings.statsGraph
+    fun setPeriod(p: StatsPeriod) = Repo.updateSettings { it.copy(statsPeriod = p.name) }
+    fun setGraph(g: Boolean) = Repo.updateSettings { it.copy(statsGraph = g) }
     var offset by rememberSaveable { mutableIntStateOf(0) }
-    var graph by rememberSaveable { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<StatRow?>(null) }
     val requestedDay by StatsNav.day.collectAsState()
     LaunchedEffect(requestedDay) {
         requestedDay?.let { d ->
-            period = StatsPeriod.DAILY
+            setPeriod(StatsPeriod.DAILY)
             offset = (d - LocalDate.now().toEpochDay()).toInt()
             StatsNav.day.value = null
         }
@@ -245,7 +249,7 @@ fun StatsScreen() {
                 SegmentedButton(
                     selected = period == p,
                     onClick = {
-                        period = p
+                        setPeriod(p)
                         offset = 0
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = i, count = StatsPeriod.entries.size),
@@ -287,12 +291,12 @@ fun StatsScreen() {
                 SingleChoiceSegmentedButtonRow {
                     SegmentedButton(
                         selected = !graph,
-                        onClick = { graph = false },
+                        onClick = { setGraph(false) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                     ) { Text("List") }
                     SegmentedButton(
                         selected = graph,
-                        onClick = { graph = true },
+                        onClick = { setGraph(true) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                     ) { Text("Graph") }
                 }

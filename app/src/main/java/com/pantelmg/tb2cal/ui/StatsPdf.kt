@@ -28,7 +28,7 @@ internal object StatsPdf {
     private const val DEFAULT_COLOR = 0xFF1565C0.toInt()
 
     /**
-     * Only the period shown: Daily "11 Nov 2026", weekly "09 to 15 Nov 2026" or "27 Oct to 02 Nov 2026"
+     * "TB2Cal " + only the period shown: Daily "11 Nov 2026", weekly "09 to 15 Nov 2026" or "27 Oct to 02 Nov 2026"
      * (and "29 Dec 2025 to 04 Jan 2026" across years), monthly "Oct 2026", yearly "2026".
      */
     fun fileName(period: StatsPeriod, start: LocalDate, end: LocalDate): String {
@@ -44,7 +44,7 @@ internal object StatsPdf {
             StatsPeriod.MONTHLY -> f(start, "MMM yyyy")
             StatsPeriod.YEARLY -> "${start.year}"
         }
-        return "$name.pdf"
+        return "TB2Cal $name.pdf"
     }
 
     fun write(

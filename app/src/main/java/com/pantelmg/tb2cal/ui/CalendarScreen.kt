@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Column
@@ -121,6 +122,9 @@ fun CalendarScreen() {
         }
     }
 
+    // TB Total on: Same-name TimeBlocks of a day are shown merged (grid and list).
+    val shownByDay = remember(byDay, settings.tbTotal) { CalendarData.shown(byDay, settings.tbTotal) }
+
     val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (CalendarWriter.hasPermission(ctx)) Repo.updateSettings { it.copy(gmailView = true) }
     }
@@ -207,7 +211,7 @@ fun CalendarScreen() {
                     for (d in 0 until 7) {
                         val date = gridStart.plusDays((w * 7 + d).toLong())
                         val inMonth = date.month == month.month
-                        val items = byDay[date].orEmpty()
+                        val items = shownByDay[date].orEmpty()
                         val isSelected = date.toEpochDay() == selected
                         Column(
                             Modifier
@@ -277,14 +281,35 @@ fun CalendarScreen() {
 
         // ---- Chosen day ----
         val day = LocalDate.ofEpochDay(selected)
-        val dayItems = byDay[day].orEmpty()
+        val dayItems = shownByDay[day].orEmpty()
         val tf = DateFormat.getTimeFormat(ctx)
-        Text(
-            day.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", locale)).replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-        )
+        // Short date (e.g. Mon 15/12/26) and, on the other side, the TB Total switch (crossed out when off).
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                day.format(DateTimeFormatter.ofPattern("EEE dd/MM/yy", Locale.ENGLISH)),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            val on = settings.tbTotal
+            val boxShape = RoundedCornerShape(8.dp)
+            Text(
+                "TB Total",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                textDecoration = if (on) null else TextDecoration.LineThrough,
+                modifier = Modifier
+                    .clip(boxShape)
+                    .border(1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, boxShape)
+                    .clickable { Repo.updateSettings { it.copy(tbTotal = !it.tbTotal) } }
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+        }
         // Only this list scrolls (and only if it doesn't fit).
         LazyColumn(Modifier.weight(0.34f).fillMaxWidth()) {
             if (dayItems.isEmpty()) {
@@ -303,7 +328,8 @@ fun CalendarScreen() {
                     Column(Modifier.weight(1f)) {
                         Text(item.label, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            buildString {
+                            if (settings.tbTotal && item.isTimeBlock) "TimeBlock Total"
+                            else buildString {
                                 append(if (item.allDay) "All day" else "${tf.format(Date(item.startMs))} – ${tf.format(Date(item.endMs))}")
                                 append(if (item.isTimeBlock) " · TimeBlock" else " · Gmail")
                             },
@@ -323,22 +349,28 @@ fun CalendarScreen() {
     }
 
     toDelete?.let { item ->
+        // A TB Total entry deletes every TimeBlock of that name on that day.
+        val parts = item.parts.ifEmpty { listOf(item) }
         AlertDialog(
             onDismissRequest = { toDelete = null },
             title = { Text("Delete ${item.label}?") },
             text = {
                 Text(
-                    "This TimeBlock will be removed from the app (Calendar and Statistics) and from TB2Cal's " +
-                        "calendar on your phone. This can't be undone."
+                    (if (parts.size > 1) "All ${parts.size} ${item.blockName ?: ""} TimeBlocks of this day will be removed"
+                    else "This TimeBlock will be removed") +
+                        " from the app (Calendar and Statistics) and from TB2Cal's calendar on your phone. " +
+                        "This can't be undone."
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val name = item.blockName
                     toDelete = null
-                    if (name != null) {
-                        Repo.removeHistoryEntry(name, item.startMs)
-                        scope.launch(Dispatchers.IO) { CalendarWriter.deleteFromLocal(ctx, item.label, item.startMs) }
+                    parts.forEach { p ->
+                        val name = p.blockName ?: return@forEach
+                        Repo.removeHistoryEntry(name, p.startMs)
+                    }
+                    scope.launch(Dispatchers.IO) {
+                        parts.forEach { p -> CalendarWriter.deleteFromLocal(ctx, p.label, p.startMs) }
                     }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.pantelmg.tb2cal.model.BlockType
 import com.pantelmg.tb2cal.model.CompletedBlock
+import com.pantelmg.tb2cal.model.Goal
 import com.pantelmg.tb2cal.model.HistoryEntry
 import com.pantelmg.tb2cal.model.Session
 import com.pantelmg.tb2cal.model.Settings
@@ -24,6 +25,7 @@ object Repo {
     val settings = MutableStateFlow(Settings())
     val pending = MutableStateFlow<List<CompletedBlock>>(emptyList())
     val history = MutableStateFlow<List<HistoryEntry>>(emptyList())
+    val goals = MutableStateFlow<List<Goal>>(emptyList())
 
     fun init(ctx: Context) {
         synchronized(lock) {
@@ -41,6 +43,7 @@ object Repo {
             pending.value = (readList("pending") { CompletedBlock.fromJson(it) } ?: emptyList())
                 .filterNot { it.registered && it.endWallMs < dayAgo }
             history.value = readList("history") { HistoryEntry.fromJson(it) } ?: emptyList()
+            goals.value = readList("goals") { Goal.fromJson(it) } ?: emptyList()
         }
     }
 
@@ -51,6 +54,15 @@ object Repo {
             writeList("blocks", list) { it.toJson() }
         }
         changed()
+    }
+
+    // ---- Goals ----
+    fun setGoal(period: String, nameKey: String, startDay: Long, minutes: Int, onward: Boolean) {
+        synchronized(lock) {
+            val list = Goal.set(goals.value, period, nameKey, startDay, minutes, onward)
+            goals.value = list
+            writeList("goals", list) { it.toJson() }
+        }
     }
 
     // ---- Settings ----

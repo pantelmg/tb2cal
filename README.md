@@ -4,7 +4,7 @@ By [github.com/pantelmg](https://github.com/pantelmg)
 
 Create TimeBlocks, with your own conditions, to track and improve productivity. Completed TimeBlocks are registered in
 the app and the local Calendar. Use the app's widgets (Calendar and TimeBlock manager) for efficiency. Bonus: Import
-events from your Google account, export TimeBlock statistics for a given time period to PDF.
+events from your Google account, export TimeBlock statistics for a given time period to PDF, set Goals.
 
 ## TimeBlocks tab
 - **Your list:** `study` and `workout` to start with. Add, rename and remove TimeBlocks, each with a color: 11 presets
@@ -12,6 +12,7 @@ events from your Google account, export TimeBlock statistics for a given time pe
   (0–255) or a hex code).
 - **Two modes:** **Timer** counts down from the hours and minutes you set (or a preset); **Stopwatch** counts up until
   you tap COMPLETE. Each TimeBlock remembers its own countdown as soon as you change it, also for the widget.
+- **Presets:** Tap one under the countdown to set it. **Edit** (at the end of the row) adds, removes or resets them.
 - **Controls:** START locks every option; PAUSE/RESUME keeps them locked; STOP discards the TimeBlock and unlocks them.
   The buttons stay in the same place in both modes.
 - **Permanent notification** while a TimeBlock runs: Name, mode and live time, with Pause/Resume, Stop (and Complete in
@@ -23,20 +24,33 @@ events from your Google account, export TimeBlock statistics for a given time pe
   never be saved twice.
 
 ## Calendar tab
-- Month view of your completed TimeBlocks. Tap a day to see its list.
-- The bin next to a TimeBlock deletes it from the app and from TB2Cal's phone calendar (after you confirm).
+- Month view of your completed TimeBlocks. Tap a day to see its list, under its short date (e.g. `Mon 15/12/26`).
+- **TB Total** (off by default, remembered; crossed out when off): Merges same-name TimeBlocks of a day into one
+  total, in the order of the first of each name, in the grid, the list (marked *TimeBlock Total*) and the widget.
+- The bin next to a TimeBlock deletes it from the app and from TB2Cal's phone calendar (after you confirm). On a
+  TB Total entry it deletes every TimeBlock of that name on that day.
 - **Sync with your Gmail** (off by default): Also shows the events of the Google accounts on the phone, read-only and
   instantly, in the same colors as Google's calendar app.
 
 ## Statistics tab
-- **Daily, Weekly, Monthly and Yearly** totals per TimeBlock name; ‹ › go to earlier or later periods.
+- **Daily, Weekly, Monthly and Yearly** totals per TimeBlock name; ‹ › go to earlier or later periods. The period and
+  List/Graph you picked are remembered.
 - **List:** Each name with its count, total and a bar; The bin deletes that sum from Statistics (after you confirm).
 - **Graph:** Stacked columns per hour (daily), day (weekly, monthly) or month (yearly), in the TimeBlocks' colors.
 - **Export PDF:** Saves the graph of the selected period with a table of every TimeBlock (count, total, share). The
-  file is named after the period only: `11 Nov 2026`, `09 to 15 Nov 2026`, `27 Oct to 02 Nov 2026`, `Oct 2026` or
-  `2026`.
+  file is named `TB2Cal` + the period: `TB2Cal 11 Nov 2026`, `TB2Cal 09 to 15 Nov 2026`,
+  `TB2Cal 27 Oct to 02 Nov 2026`, `TB2Cal Oct 2026` or `TB2Cal 2026`.
 
-Every tab fits on one page; Only the Calendar day list and the Statistics list scroll, when they're too long.
+## Goals tab
+- Laid out like Statistics: **Daily, Weekly, Monthly and Yearly**, ‹ › for other periods (also later ones).
+- Every TimeBlock of your list: **Tap to set** opens hours and minutes; **Retap to save** saves the goal (0h 0m
+  removes it). The bar shows how much of the goal is done, with **Z% of Goal** next to the name.
+- **N goals set in this time period:** The TimeBlocks with a goal of the period type shown.
+- **Apply onward** (one switch per period type, off by default, remembered; crossed out when off): On, a goal you set
+  repeats in every later period of that type; Off, it's only for the period shown.
+
+Every tab fits on one page; Only the Calendar day list and the Statistics and Goals lists scroll, when they're too
+long.
 
 ## Widgets
 - **TimeBlock manager (4×1):** T/S (tap to switch Timer/Stopwatch), the TimeBlock (tap to cycle through your list),
@@ -44,7 +58,7 @@ Every tab fits on one page; Only the Calendar day list and the Statistics list s
   Buttons that can't be used do nothing.
 - **Calendar (4×4 or larger):** The same month view as the Calendar tab. ‹ › change month, tap the month name for
   the current month, the TB icon opens TB2Cal, tap a day to open it in the app. Each day shows up to 3 entries at
-  4 rows, 4 at 5 rows and 5 at 6 rows or taller, with +N next to the day number when there are more.
+  4 rows, 4 at 5 rows and 5 at 6 rows or taller, with +N next to the day number when there are more. Follows TB Total.
 
 ## Staying alive on Xiaomi and other strict phones
 - Foreground service with a permanent notification; An exact alarm-clock alarm for the timer end; A heartbeat alarm

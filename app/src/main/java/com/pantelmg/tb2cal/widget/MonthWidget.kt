@@ -114,7 +114,10 @@ class MonthWidget : AppWidgetProvider() {
             val gridEnd = gridStart.plusDays(42)
             // Completed TimeBlocks, plus Gmail events when "Sync with your Gmail" is on.
             val byDay: Map<LocalDate, List<DayItem>> =
-                runCatching { CalendarData.byDay(ctx, gridStart, gridEnd) }.getOrDefault(emptyMap())
+                runCatching {
+                    // TB Total on: Same-name TimeBlocks of a day merged, as in the Calendar tab.
+                    CalendarData.shown(CalendarData.byDay(ctx, gridStart, gridEnd), Repo.settings.value.tbTotal)
+                }.getOrDefault(emptyMap())
 
             // ---- 6 × 7 grid ----
             // Height of one day cell (dp), from the widget's real size: Everything but the grid takes ~84dp (a little spare).

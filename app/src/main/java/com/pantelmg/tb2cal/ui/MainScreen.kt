@@ -50,6 +50,9 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.AssistChip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -91,12 +94,11 @@ import com.pantelmg.tb2cal.service.TimeblockService
 import kotlinx.coroutines.delay
 import java.util.Date
 
-private val PRESETS = listOf(15, 25, 45, 60, 90, 120)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     onEdit: () -> Unit,
+    onEditPresets: () -> Unit,
     onSettings: () -> Unit,
     onOpenCompletion: () -> Unit,
     onOpenReliability: () -> Unit,
@@ -386,23 +388,40 @@ fun MainScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+            // Presets scroll sideways; The Edit chip stays fixed at the right end.
             Row(
                 Modifier
-                    .horizontalScroll(rememberScrollState())
+                    .fillMaxWidth()
                     .padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                PRESETS.forEach { mins ->
-                    SuggestionChip(
-                        onClick = {
-                            hours = (mins / 60).toString()
-                            minutes = (mins % 60).toString()
-                            saveTimer(mins / 60, mins % 60)
-                        },
-                        enabled = !locked,
-                        label = { Text(Fmt.duration(mins * 60_000L)) }
-                    )
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clipToBounds()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    settings.presets.forEach { mins ->
+                        SuggestionChip(
+                            onClick = {
+                                hours = (mins / 60).toString()
+                                minutes = (mins % 60).toString()
+                                saveTimer(mins / 60, mins % 60)
+                            },
+                            enabled = !locked,
+                            label = { Text(Fmt.duration(mins * 60_000L)) }
+                        )
+                    }
                 }
+                Spacer(Modifier.width(8.dp))
+                // Edit the preset list (own screen).
+                AssistChip(
+                    onClick = onEditPresets,
+                    enabled = !locked,
+                    label = { Text("Edit") },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
             }
         }
 

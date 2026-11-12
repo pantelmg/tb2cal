@@ -19,6 +19,10 @@ data class DayItem(
     val isTimeBlock: Boolean,
     /** TimeBlocks only: Its name as recorded, used to delete exactly this one. */
     val blockName: String? = null,
+    /** TimeBlocks only: Active time. */
+    val activeMs: Long = 0,
+    /** TB Total: The TimeBlocks merged into this one (empty when not merged). */
+    val parts: List<DayItem> = emptyList(),
 )
 
 /**
@@ -27,6 +31,38 @@ data class DayItem(
  */
 object CalendarData {
     private const val DEFAULT_COLOR = 0xFF1565C0.toInt()
+
+    /**
+     * TB Total: Same-name TimeBlocks of one day become one entry with their time sum, placed where the first of
+     * them was (so the order of the first of each name is kept). Events are left as they are.
+     */
+    fun mergeTotals(list: List<DayItem>): List<DayItem> {
+        val out = mutableListOf<DayItem>()
+        val index = mutableMapOf<String, Int>()
+        list.forEach { item ->
+            val name = item.blockName
+            if (!item.isTimeBlock || name == null) {
+                out += item
+                return@forEach
+            }
+            val key = name.trim().lowercase()
+            val i = index[key]
+            if (i == null) {
+                index[key] = out.size
+                out += item.copy(parts = listOf(item))
+            } else {
+                val m = out[i]
+                val parts = m.parts + item
+                val sum = parts.sumOf { it.activeMs }
+                out[i] = m.copy(label = "${Fmt.duration(sum)} ${m.blockName}", activeMs = sum, parts = parts)
+            }
+        }
+        return out
+    }
+
+    /** [byDay], merged by name when TB Total is on. */
+    fun shown(byDay: Map<LocalDate, List<DayItem>>, tbTotal: Boolean): Map<LocalDate, List<DayItem>> =
+        if (tbTotal) byDay.mapValues { (_, l) -> mergeTotals(l) } else byDay
 
     /** Items per day for [from, toExclusive). Blocking (reads the phone's calendar): Call off the main thread. */
     fun byDay(ctx: Context, from: LocalDate, toExclusive: LocalDate): Map<LocalDate, List<DayItem>> {
@@ -46,7 +82,8 @@ object CalendarData {
             add(
                 Instant.ofEpochMilli(h.startWallMs).atZone(zone).toLocalDate(),
                 DayItem(label, GoogleColors.byKey(h.colorKey)?.argb?.toInt() ?: DEFAULT_COLOR,
-                    h.startWallMs, h.startWallMs + h.activeMs, allDay = false, isTimeBlock = true, blockName = h.name)
+                    h.startWallMs, h.startWallMs + h.activeMs, allDay = false, isTimeBlock = true, blockName = h.name,
+                    activeMs = h.activeMs)
             )
         }
 

@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
+import com.pantelmg.tb2cal.R
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.PlayArrow
@@ -43,7 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.pantelmg.tb2cal.calendar.CalendarWriter
 
-enum class Screen { MAIN, CALENDAR, STATS, EDIT, SETTINGS, COMPLETION, RELIABILITY }
+enum class Screen { MAIN, CALENDAR, STATS, GOALS, EDIT, PRESETS, SETTINGS, COMPLETION, RELIABILITY }
 
 class MainActivity : ComponentActivity() {
     private val navRequest = MutableStateFlow<Screen?>(null)
@@ -138,13 +140,15 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when (screen) {
-            Screen.MAIN, Screen.CALENDAR, Screen.STATS -> Column(Modifier.fillMaxSize()) {
+            Screen.MAIN, Screen.CALENDAR, Screen.STATS, Screen.GOALS -> Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f)) {
                     when (screen) {
                         Screen.CALENDAR -> CalendarScreen()
                         Screen.STATS -> StatsScreen()
+                        Screen.GOALS -> GoalsScreen()
                         else -> MainScreen(
                             onEdit = { screen = Screen.EDIT },
+                            onEditPresets = { screen = Screen.PRESETS },
                             onSettings = { screen = Screen.SETTINGS },
                             onOpenCompletion = { screen = Screen.COMPLETION },
                             onOpenReliability = { screen = Screen.RELIABILITY },
@@ -171,9 +175,16 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
                         icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
                         label = { Text("Statistics") }
                     )
+                    NavigationBarItem(
+                        selected = screen == Screen.GOALS,
+                        onClick = { screen = Screen.GOALS },
+                        icon = { Icon(painterResource(R.drawable.ic_s_goal), contentDescription = null) },
+                        label = { Text("Goals") }
+                    )
                 }
             }
             Screen.EDIT -> EditBlocksScreen(onBack = { screen = Screen.MAIN })
+            Screen.PRESETS -> PresetsScreen(onBack = { screen = Screen.MAIN })
             Screen.SETTINGS -> SettingsScreen(
                 onBack = { screen = Screen.MAIN },
                 onOpenReliability = { screen = Screen.RELIABILITY },
