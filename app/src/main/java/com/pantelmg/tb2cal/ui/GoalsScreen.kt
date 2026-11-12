@@ -1,6 +1,7 @@
 package com.pantelmg.tb2cal.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,12 +46,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.model.Fmt
@@ -62,8 +63,8 @@ private data class GoalRow(val key: String, val name: String, val colorKey: Stri
 
 /**
  * Goals tab: Laid out like Statistics (period, ‹ title ›, card, list). Every TimeBlock name of your list gets a
- * time goal per period type; The bar shows how much of the goal is done. "Apply onward" (per period type): Goals set
- * while it's on repeat in every later period of that type; While it's off, they're for the period shown only.
+ * time goal per period type; The bar shows how much of the goal is done. "Apply onward" (per period type, ON by default): Goals
+ * saved while it's ON repeat in every later period of that type; While it's OFF, they're for the period shown only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +74,7 @@ fun GoalsScreen() {
     val goals by Repo.goals.collectAsState()
     val settings by Repo.settings.collectAsState()
     val period = runCatching { StatsPeriod.valueOf(settings.goalsPeriod) }.getOrDefault(StatsPeriod.WEEKLY)
-    val onward = period.name in settings.applyOnward
+    val onward = period.name !in settings.onwardOff
     var offset by rememberSaveable { mutableIntStateOf(0) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var hours by rememberSaveable { mutableStateOf("") }
@@ -152,22 +153,29 @@ fun GoalsScreen() {
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        Repo.updateSettings {
-                            it.copy(applyOnward = if (onward) it.applyOnward - period.name else it.applyOnward + period.name)
-                        }
-                    },
-                    border = BorderStroke(1.dp, if (onward) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = if (onward) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.width(168.dp)
-                ) {
+                // Same size ON or OFF; Only the colors change. The choice is used when a goal is saved.
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    OutlinedButton(
+                        onClick = {
+                            Repo.updateSettings {
+                                it.copy(onwardOff = if (onward) it.onwardOff + period.name else it.onwardOff - period.name)
+                            }
+                        },
+                        border = BorderStroke(1.dp, if (onward) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (onward) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                        modifier = Modifier.width(168.dp)
+                    ) {
+                        Text(if (onward) "Apply onward ON" else "Apply onward OFF", maxLines = 1)
+                    }
+                    // Shown only when ON; When OFF it's invisible but keeps its space, so nothing shifts.
                     Text(
-                        "Apply onward",
-                        textDecoration = if (onward) null else TextDecoration.LineThrough,
-                        maxLines = 1
+                        "Applied on retap to save",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.alpha(if (onward) 1f else 0f)
                     )
                 }
             }

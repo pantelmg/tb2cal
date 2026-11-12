@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Column
@@ -53,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -296,19 +296,21 @@ fun CalendarScreen() {
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
+            // TB Total ON/OFF: Same size either way (sized for the longer "OFF" text); Only the colors change.
             val on = settings.tbTotal
-            val boxShape = RoundedCornerShape(8.dp)
-            Text(
-                "TB Total",
-                style = MaterialTheme.typography.labelLarge,
-                color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                textDecoration = if (on) null else TextDecoration.LineThrough,
-                modifier = Modifier
+            val boxShape = RoundedCornerShape(10.dp)
+            val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            Box(
+                Modifier
                     .clip(boxShape)
                     .border(1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, boxShape)
                     .clickable { Repo.updateSettings { it.copy(tbTotal = !it.tbTotal) } }
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            )
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("TB Total OFF", style = MaterialTheme.typography.titleSmall, modifier = Modifier.alpha(0f))
+                Text(if (on) "TB Total ON" else "TB Total OFF", style = MaterialTheme.typography.titleSmall, color = tint)
+            }
         }
         // Only this list scrolls (and only if it doesn't fit).
         LazyColumn(Modifier.weight(0.34f).fillMaxWidth()) {

@@ -306,7 +306,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
             AppSymbol(32.dp)
             Spacer(Modifier.height(6.dp))
             Text(
-                if (version.isNotEmpty()) "TB2Cal $version" else "TB2Cal",
+                if (version.isNotEmpty()) "TB2Cal v$version" else "TB2Cal",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )

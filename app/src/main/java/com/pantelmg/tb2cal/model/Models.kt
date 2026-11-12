@@ -215,9 +215,9 @@ data class Settings(
     /** Statistics tab: Last period (DAILY, WEEKLY, MONTHLY, YEARLY) and Graph instead of List. */
     val statsPeriod: String = "WEEKLY",
     val statsGraph: Boolean = false,
-    /** Goals tab: Last period, and the periods whose new goals repeat from then on ("Apply onward"). */
+    /** Goals tab: Last period, and the periods with "Apply onward" turned OFF (it's ON by default). */
     val goalsPeriod: String = "WEEKLY",
-    val applyOnward: Set<String> = emptySet(),
+    val onwardOff: Set<String> = emptySet(),
 ) {
 
     /** Countdown minutes of a TimeBlock: Its own, or the default. */
@@ -236,7 +236,7 @@ data class Settings(
         .put("presets", org.json.JSONArray().also { a -> presets.forEach { a.put(it) } })
         .put("tbTotal", tbTotal).put("statsPeriod", statsPeriod).put("statsGraph", statsGraph)
         .put("goalsPeriod", goalsPeriod)
-        .put("onward", org.json.JSONArray().also { a -> applyOnward.forEach { a.put(it) } })
+        .put("onwardOff", org.json.JSONArray().also { a -> onwardOff.forEach { a.put(it) } })
 
     companion object {
         val DEFAULT_PRESETS = listOf(15, 25, 45, 60, 90, 120)
@@ -270,7 +270,7 @@ data class Settings(
             statsPeriod = o.optString("statsPeriod").ifEmpty { "WEEKLY" },
             statsGraph = o.optBoolean("statsGraph"),
             goalsPeriod = o.optString("goalsPeriod").ifEmpty { "WEEKLY" },
-            applyOnward = o.optJSONArray("onward")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
+            onwardOff = o.optJSONArray("onwardOff")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
             permissionsAsked = o.optBoolean("permAsked"),
         )
     }

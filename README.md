@@ -25,7 +25,7 @@ events from your Google account, export TimeBlock statistics for a given time pe
 
 ## Calendar tab
 - Month view of your completed TimeBlocks. Tap a day to see its list, under its short date (e.g. `Mon 15/12/26`).
-- **TB Total** (off by default, remembered; crossed out when off): Merges same-name TimeBlocks of a day into one
+- **TB Total ON/OFF** (OFF by default, remembered): Merges same-name TimeBlocks of a day into one
   total, in the order of the first of each name, in the grid, the list (marked *TimeBlock Total*) and the widget.
 - The bin next to a TimeBlock deletes it from the app and from TB2Cal's phone calendar (after you confirm). On a
   TB Total entry it deletes every TimeBlock of that name on that day.
@@ -46,8 +46,8 @@ events from your Google account, export TimeBlock statistics for a given time pe
 - Every TimeBlock of your list: **Tap to set** opens hours and minutes; **Retap to save** saves the goal (0h 0m
   removes it). The bar shows how much of the goal is done, with **Z% of Goal** next to the name.
 - **N goals set in this time period:** The TimeBlocks with a goal of the period type shown.
-- **Apply onward** (one switch per period type, off by default, remembered; crossed out when off): On, a goal you set
-  repeats in every later period of that type; Off, it's only for the period shown.
+- **Apply onward ON/OFF** (one per period type, ON by default, remembered; Applied on retap to save): ON, a goal you
+  save repeats in every later period of that type; OFF, it's only for the period shown.
 
 Every tab fits on one page; Only the Calendar day list and the Statistics and Goals lists scroll, when they're too
 long.
