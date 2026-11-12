@@ -41,9 +41,9 @@ Every tab fits on one page; Only the Calendar day list and the Statistics list s
 - **TimeBlock manager (4×1):** T/S (tap to switch Timer/Stopwatch), the TimeBlock (tap to cycle through your list),
   then Start, Pause and Stop, always in the same place. In Stopwatch mode a boxed ✓ (Complete) appears left of Start.
   Buttons that can't be used do nothing.
-- **Calendar (4×5 or larger):** The same month view as the Calendar tab. ‹ › change month, tap the month
-  name for the current month, the TB icon opens TB2Cal, tap a day to open it in the app. Each day shows up to 3
-  entries (4 at 4×6, 5 at 4×7 or taller), with +N next to the day number when there are more.
+- **Calendar (4×4 or larger):** The same month view as the Calendar tab. ‹ › change month, tap the month name for
+  the current month, the TB icon opens TB2Cal, tap a day to open it in the app. Each day shows up to 3 entries at
+  4 rows, 4 at 5 rows and 5 at 6 rows or taller, with +N next to the day number when there are more.
 
 ## Staying alive on Xiaomi and other strict phones
 - Foreground service with a permanent notification; An exact alarm-clock alarm for the timer end; A heartbeat alarm

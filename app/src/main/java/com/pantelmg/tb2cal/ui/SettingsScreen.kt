@@ -6,33 +6,47 @@ import android.media.RingtoneManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,9 +55,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
+import com.pantelmg.tb2cal.R
 import com.pantelmg.tb2cal.calendar.CalendarWriter
 import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.data.SoundStore
@@ -54,10 +77,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Settings, styled like the app's tabs: Big bold title, then grouped cards with a round icon per row.
+ * Completion alert (sound, volume, vibration, test) · Background reliability · Calendar access (only if missing).
+ */
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
     val ctx = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val settings by Repo.settings.collectAsState()
     var hasCalPerm by remember { mutableStateOf(CalendarWriter.hasPermission(ctx)) }
     val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -106,151 +133,265 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
                 ?: "Custom sound"
         }
     }
+    val version = remember {
+        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
+    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
+    fun openSoundPicker() {
+        val current: Uri? = when (val u = settings.soundUri) {
+            "" -> null
+            null -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            else -> Uri.parse(u)
         }
-    ) { pad ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(pad)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-        ) {
-            SectionTitle("Completion alert")
+        val i = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION or RingtoneManager.TYPE_ALARM)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "TimeBlock completed sound")
+        runCatching { soundPicker.launch(i) }
+    }
 
-            // ---- Sound ----
-            Text("Sound", style = MaterialTheme.typography.titleSmall)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp)
+    ) {
+        // ---- Header (same style as the tabs) ----
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.offset(x = (-12).dp)) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        }
+        Text(
+            "Completion alert, background reliability and calendar access.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        // ---- Completion alert ----
+        SectionLabel("Completion alert")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_sound),
+                title = "Sound",
+                subtitle = soundLabel,
+                subtitleColor = MaterialTheme.colorScheme.primary,
+                onClick = { openSoundPicker() },
+                trailing = { Chevron() }
+            )
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        val current: Uri? = when (val u = settings.soundUri) {
-                            "" -> null
-                            null -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                            else -> Uri.parse(u)
-                        }
-                        val i = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
-                            .putExtra(
-                                RingtoneManager.EXTRA_RINGTONE_TYPE,
-                                RingtoneManager.TYPE_NOTIFICATION or RingtoneManager.TYPE_ALARM
-                            )
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current)
-                            .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "TimeBlock completed sound")
-                        runCatching { soundPicker.launch(i) }
-                    }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.padding(start = 64.dp, end = 8.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(soundLabel, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                TextButton(
+                    onClick = { runCatching { filePicker.launch(arrayOf("audio/*")) } },
+                    contentPadding = ButtonDefaults.TextButtonWithIconContentPadding
+                ) {
+                    Icon(painterResource(R.drawable.ic_s_folder), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Audio file…")
+                }
                 if (settings.soundUri != null) {
-                    TextButton(onClick = {
-                        SoundStore.cleanup(ctx, keep = null)
-                        Repo.updateSettings { it.copy(soundUri = null, soundTitle = null) }
-                    }) {
+                    TextButton(
+                        onClick = {
+                            SoundStore.cleanup(ctx, keep = null)
+                            Repo.updateSettings { it.copy(soundUri = null, soundTitle = null) }
+                        },
+                        contentPadding = ButtonDefaults.TextButtonWithIconContentPadding
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
                         Text("Reset to default")
                     }
                 }
             }
-            TextButton(onClick = { runCatching { filePicker.launch(arrayOf("audio/*")) } }) {
-                Text("Choose an audio file…")
-            }
-            soundMsg?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-
-            // ---- Volume ----
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { Repo.updateSettings { it.copy(useMediaVolume = !it.useMediaVolume) } }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Use media volume", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        if (settings.useMediaVolume) "Plays at the multimedia volume. Rings even in silent mode."
-                        else "Plays at the notification volume. Follows silent and vibrate mode.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = settings.useMediaVolume,
-                    onCheckedChange = { v -> Repo.updateSettings { it.copy(useMediaVolume = v) } }
+            soundMsg?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 72.dp, end = 16.dp, bottom = 8.dp)
                 )
             }
-
-            // ---- Vibration ----
-            Spacer(Modifier.height(8.dp))
-            Text("Vibration", style = MaterialTheme.typography.titleSmall)
-            Vibration.entries.forEach { v ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            Repo.updateSettings { it.copy(vibration = v) }
-                            AlertService.preview(ctx, v)
-                        },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(selected = settings.vibration == v, onClick = null)
-                    Text(v.label, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 12.dp))
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_volume),
+                title = "Use media volume",
+                subtitle = if (settings.useMediaVolume) "Plays at the multimedia volume.\nRings even in silent mode."
+                else "Plays at the notification volume.\nFollows silent and vibrate mode.",
+                onClick = { Repo.updateSettings { it.copy(useMediaVolume = !it.useMediaVolume) } },
+                trailing = {
+                    Switch(
+                        checked = settings.useMediaVolume,
+                        onCheckedChange = { v -> Repo.updateSettings { it.copy(useMediaVolume = v) } }
+                    )
+                }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_vibration),
+                title = "Vibration",
+                subtitle = "Tap an option to feel it."
+            )
+            Column(Modifier.padding(start = 56.dp, end = 8.dp, bottom = 8.dp)) {
+                Vibration.entries.forEach { v ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable {
+                                Repo.updateSettings { it.copy(vibration = v) }
+                                AlertService.preview(ctx, v)
+                            }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = settings.vibration == v, onClick = null, modifier = Modifier.padding(8.dp))
+                        Text(v.label, style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = {
+        }
+        Spacer(Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = {
                 if (alertRunning) AlertService.stop(ctx, keepNotification = false)
                 else AlertService.start(ctx, "Test", test = true)
-            }) { Text(if (alertRunning) "Stop alert" else "Test alert") }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                if (alertRunning) Icons.Default.Close else Icons.Default.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(if (alertRunning) "Stop alert" else "Test alert")
+        }
 
-            // ---- Reliability ----
-            Spacer(Modifier.height(20.dp))
-            HorizontalDivider()
-            SectionTitle("Background reliability")
+        // ---- Background ----
+        SectionLabel("Background")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_shield),
+                title = "Background reliability",
+                subtitle = "Keep ${Reliability.oemName}'s battery manager from stopping running TimeBlocks.",
+                onClick = onOpenReliability,
+                trailing = { Chevron() }
+            )
+        }
+
+        // ---- Calendar access (only when it's missing) ----
+        if (!hasCalPerm) {
+            SectionLabel("Calendar")
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                SettingRow(
+                    icon = rememberVectorPainter(Icons.Default.DateRange),
+                    title = "Calendar access",
+                    subtitle = "Needed to save completed TimeBlocks in your phone's calendar.",
+                    onClick = { calPerm.launch(CalendarWriter.PERMS) },
+                    trailing = { Button(onClick = { calPerm.launch(CalendarWriter.PERMS) }) { Text("Allow") } }
+                )
+            }
+        }
+
+        // ---- About ----
+        Spacer(Modifier.height(28.dp))
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            AppSymbol(32.dp)
+            Spacer(Modifier.height(6.dp))
             Text(
-                "Stop ${Reliability.oemName}'s battery manager from killing running TimeBlocks " +
-                    "(battery optimization, autostart, battery saver).",
+                if (version.isNotEmpty()) "TB2Cal $version" else "TB2Cal",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "TimeBlocks to Calendar",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onOpenReliability) { Text("Open checklist") }
+            Text(
+                "by github.com/pantelmg",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .clickable { uriHandler.openUri("https://github.com/pantelmg") }
+            )
+        }
+    }
+}
 
-            // ---- Calendar access ----
-            if (!hasCalPerm) {
-                Spacer(Modifier.height(20.dp))
-                HorizontalDivider()
-                SectionTitle("Calendar")
-                Text(
-                    "Calendar access is needed to save completed TimeBlocks in your phone's calendar.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = { calPerm.launch(CalendarWriter.PERMS) }) { Text("Allow calendar access") }
+/** Small primary label above a group of settings. */
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp)
+    )
+}
+
+/** One setting: Round tonal icon, title and description, then a switch, button or arrow at the end. */
+@Composable
+private fun SettingRow(
+    icon: Painter,
+    title: String,
+    subtitle: String? = null,
+    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
             }
-            Spacer(Modifier.height(24.dp))
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            trailing()
         }
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
+private fun Chevron() {
+    Icon(
+        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun RowDivider() {
+    HorizontalDivider(
+        Modifier.padding(start = 72.dp, end = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     )
 }

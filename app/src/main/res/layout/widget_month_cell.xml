@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One day: Day number in the middle (+N at its right when there are more than 3), then up to 3 entries (4 at 4×6, 5 at 4×7).
+<!-- One day: Day number in the middle (+N at its right when there are more than 3), then up to 3 entries (4 at 4×5, 5 at 4×6 or taller).
      Sizes are in dp (not sp), so the phone's font size can't push the 3rd entry out of the cell.
      On Android 12+ the widget also fits them to the real cell height. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"

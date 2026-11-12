@@ -139,12 +139,13 @@ class MonthWidget : AppWidgetProvider() {
             today: LocalDate, blocks: List<DayItem>, cellH: Float,
         ): RemoteViews {
             val c = RemoteViews(ctx.packageName, R.layout.widget_month_cell)
-            // How many entries fit, from the real cell height: 3 at 4×5, 4 at 4×6, 5 at 4×7 (and larger).
-            // Android 12+ also sizes the day number and the entries to fill the cell evenly; Older versions
-            // keep the layout's sizes (17dp day row, 10.5dp entries).
+            // How many entries fit, from the real cell height: 3 at 4 rows, 4 at 5 rows, 5 at 6 rows or more
+            // (about 9.5dp per entry). Android 12+ also sizes the day number and the entries to fill the cell
+            // evenly; Older versions keep the layout's sizes (17dp day row, 10.5dp entries).
             val modern = Build.VERSION.SDK_INT >= 31 && cellH > 0f
             val head = if (modern) (cellH * 0.3f).coerceIn(13f, 18f) else 17f
-            val count = if (cellH > 0f) ((cellH - 1f - head) / 11f).toInt().coerceIn(3, CHIP_IDS.size) else 3
+            val pitch = if (modern) 9.5f else 11.5f
+            val count = if (cellH > 0f) ((cellH - 1f - head) / pitch).toInt().coerceIn(3, CHIP_IDS.size) else 3
             if (modern) {
                 val dip = TypedValue.COMPLEX_UNIT_DIP
                 val chip = ((cellH - 1f - head) / count - 1f).coerceIn(8f, 15f)

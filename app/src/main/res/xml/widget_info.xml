@@ -5,7 +5,7 @@
     android:minWidth="250dp"
     android:minHeight="40dp"
     android:minResizeWidth="250dp"
-    android:previewLayout="@layout/widget_tb2cal"
+    android:previewImage="@drawable/widget_preview_manager"
     android:resizeMode="horizontal"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
