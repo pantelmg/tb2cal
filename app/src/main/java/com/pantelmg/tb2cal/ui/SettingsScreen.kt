@@ -175,7 +175,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         Text(
-            "Completion alert, background reliability and calendar access.",
+            "Completion alert, secondary color and background reliability.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

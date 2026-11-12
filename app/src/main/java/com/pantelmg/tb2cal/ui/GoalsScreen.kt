@@ -107,7 +107,7 @@ fun GoalsScreen() {
     ) {
         Text("Goals", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(
-            "Set a time goal for each TimeBlock and see how much of it is done.",
+            "Set a time goal for each TimeBlock and monitor progress.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
