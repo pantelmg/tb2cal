@@ -59,6 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pantelmg.tb2cal.model.GoogleColors
 import com.pantelmg.tb2cal.calendar.CalendarData
 import com.pantelmg.tb2cal.calendar.CalendarWriter
 import com.pantelmg.tb2cal.calendar.DayItem
@@ -257,7 +258,7 @@ fun CalendarScreen() {
                                     lineHeight = chipLine,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = Color.White,
+                                    color = Color(GoogleColors.textOn(item.color)),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 1.dp)

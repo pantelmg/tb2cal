@@ -49,6 +49,19 @@ object GoogleColors {
         String.format(java.util.Locale.ROOT, "#%02X%02X%02X", r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
 
     fun isCustom(key: String?) = key?.startsWith("#") == true
+
+    /**
+     * Text color for a label drawn on [argb]: White, unless the color is so light that white text would be hard to
+     * read (yellow, white, light grays, pastels…); Then black.
+     */
+    fun textOn(argb: Int): Int {
+        fun ch(c: Int): Double {
+            val s = c / 255.0
+            return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
+        }
+        val l = 0.2126 * ch((argb shr 16) and 0xFF) + 0.7152 * ch((argb shr 8) and 0xFF) + 0.0722 * ch(argb and 0xFF)
+        return if (l > 0.37) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+    }
 }
 
 /** A selectable TimeBlock name with its calendar color (null = calendar default). */

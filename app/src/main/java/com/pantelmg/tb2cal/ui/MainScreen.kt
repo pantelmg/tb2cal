@@ -71,6 +71,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.layout.paddingFromBaseline
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -105,6 +110,13 @@ fun MainScreen(
     val tick by Reliability.resumeTick.collectAsState()
     val reliabilityIssues = remember(tick, settings) { Reliability.openIssues(ctx, settings) }
     val locked = session.active
+    val density = LocalDensity.current
+    val version = remember {
+        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
+    }
+    // Where the bottom of the "TB2Cal" letters is (px from the header's top), for lining up the version.
+    var titleTopPx by remember { mutableFloatStateOf(0f) }
+    var titleBaselinePx by remember { mutableFloatStateOf(0f) }
 
     // TimeBlock choice and mode live in settings, so the app and the widget always agree.
     val selected = blocks.firstOrNull { it.id == settings.lastBlockId } ?: blocks.firstOrNull()
@@ -191,7 +203,13 @@ fun MainScreen(
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("TB2Cal", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        "TB2Cal",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        onTextLayout = { titleBaselinePx = it.firstBaseline },
+                        modifier = Modifier.onGloballyPositioned { titleTopPx = it.positionInParent().y }
+                    )
                     Spacer(Modifier.width(12.dp))
                     AppSymbol(40.dp)
                 }
@@ -205,9 +223,21 @@ fun MainScreen(
                         .clickable { uriHandler.openUri("https://github.com/pantelmg") }
                 )
             }
-            // Settings gear, with the widget tip in a small outlined box under it.
-            Column(horizontalAlignment = Alignment.End) {
-                IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+            // Version and settings gear, with the widget tip in a small outlined box under them. The version
+            // starts where the box starts and sits on the same line as the bottom of the "TB2Cal" letters.
+            Column(Modifier.width(IntrinsicSize.Max)) {
+                Row(Modifier.fillMaxWidth()) {
+                    val baseline = with(density) { (titleTopPx + titleBaselinePx).toDp() }
+                    Text(
+                        if (version.isNotEmpty()) "v$version" else "",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = if (baseline > 0.dp) Modifier.paddingFromBaseline(top = baseline) else Modifier
+                    )
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+                }
                 Text(
                     "Tip: Use the app's widgets\nfor efficiency!",
                     style = MaterialTheme.typography.labelSmall,
@@ -388,7 +418,6 @@ fun MainScreen(
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            val density = LocalDensity.current
             val captionH = with(density) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }
             val showCaption = maxHeight >= captionH + 56.dp
             val room = maxHeight - 20.dp - (if (showCaption) captionH else 0.dp)

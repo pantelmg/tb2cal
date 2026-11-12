@@ -2,7 +2,9 @@ package com.pantelmg.tb2cal.ui
 
 import android.os.Build
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -105,7 +107,7 @@ fun ColorDot(key: String?, size: Dp, modifier: Modifier = Modifier, selected: Bo
         if (selected) {
             Icon(
                 Icons.Default.Check, contentDescription = "Selected",
-                tint = if (c != null) Color.White else MaterialTheme.colorScheme.onSurface,
+                tint = if (c != null) Color(GoogleColors.textOn(c.argb.toInt())) else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(size * 0.6f)
             )
         }
@@ -176,17 +178,32 @@ fun ColorPickerDialog(current: String?, onPick: (String?) -> Unit, onDismiss: ()
     )
 }
 
-/** Hue across, light → strong → dark down, plus a gray column. Tap a cell or type R, G, B. */
+/**
+ * Hue across, light → strong → dark down, plus a gray column. Touch and slide on the map (the color follows the
+ * finger), or type R, G, B (0–255) or a hex code. A marker in the chosen color, with a ring in its negative color,
+ * shows where it is on the map.
+ */
 @Composable
 fun CustomColorDialog(initial: Int, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    fun hexOf(c: Int) = String.format(java.util.Locale.ROOT, "%06X", c and 0xFFFFFF)
     var r by remember { mutableStateOf(((initial shr 16) and 0xFF).toString()) }
     var g by remember { mutableStateOf(((initial shr 8) and 0xFF).toString()) }
     var b by remember { mutableStateOf((initial and 0xFF).toString()) }
+    var hex by remember { mutableStateOf(hexOf(initial)) }
+    // Map cell last touched (row, col); null = typed, so the marker goes to the nearest cell.
+    var touched by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
     val ri = r.toIntOrNull()?.takeIf { it in 0..255 }
     val gi = g.toIntOrNull()?.takeIf { it in 0..255 }
     val bi = b.toIntOrNull()?.takeIf { it in 0..255 }
-    val valid = ri != null && gi != null && bi != null
-    val preview = if (valid) Color(ri!!, gi!!, bi!!) else Color.Transparent
+    val chosen: Int? = if (ri != null && gi != null && bi != null) (0xFF shl 24) or (ri shl 16) or (gi shl 8) or bi else null
+
+    fun setRgb(c: Int) {
+        r = ((c shr 16) and 0xFF).toString()
+        g = ((c shr 8) and 0xFF).toString()
+        b = (c and 0xFF).toString()
+        hex = hexOf(c)
+    }
 
     val cols = 19 // 18 hues + 1 gray column
     val rows = 10
@@ -204,12 +221,32 @@ fun CustomColorDialog(initial: Int, onPick: (String) -> Unit, onDismiss: () -> U
             }
         }
     }
+    val marker: Pair<Int, Int>? = remember(chosen, touched) {
+        if (chosen == null) null
+        else touched?.takeIf { (row, col) -> cells[row][col] == chosen } ?: run {
+            // Nearest cell to a typed color.
+            var best = 0 to 0
+            var bestD = Int.MAX_VALUE
+            for (row in 0 until rows) for (col in 0 until cols) {
+                val c = cells[row][col]
+                val dr = ((c shr 16) and 0xFF) - ((chosen shr 16) and 0xFF)
+                val dg = ((c shr 8) and 0xFF) - ((chosen shr 8) and 0xFF)
+                val db = (c and 0xFF) - (chosen and 0xFF)
+                val d = dr * dr + dg * dg + db * db
+                if (d < bestD) { bestD = d; best = row to col }
+            }
+            best
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Custom color") },
         confirmButton = {
-            TextButton(onClick = { onPick(GoogleColors.customKey(ri!!, gi!!, bi!!)) }, enabled = valid) { Text("Use") }
+            TextButton(
+                onClick = { onPick(GoogleColors.customKey(ri!!, gi!!, bi!!)) },
+                enabled = chosen != null
+            ) { Text("Use") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         text = {
@@ -220,13 +257,24 @@ fun CustomColorDialog(initial: Int, onPick: (String) -> Unit, onDismiss: () -> U
                         .aspectRatio(cols / rows.toFloat())
                         .clip(MaterialTheme.shapes.small)
                         .pointerInput(Unit) {
-                            detectTapGestures { p ->
+                            fun pick(p: Offset) {
                                 val col = (p.x / size.width * cols).toInt().coerceIn(0, cols - 1)
                                 val row = (p.y / size.height * rows).toInt().coerceIn(0, rows - 1)
-                                val c = cells[row][col]
-                                r = ((c shr 16) and 0xFF).toString()
-                                g = ((c shr 8) and 0xFF).toString()
-                                b = (c and 0xFF).toString()
+                                touched = row to col
+                                setRgb(cells[row][col])
+                            }
+                            // Follows the finger while it slides, not only when it's lifted.
+                            awaitEachGesture {
+                                val down = awaitFirstDown()
+                                pick(down.position)
+                                down.consume()
+                                while (true) {
+                                    val ev = awaitPointerEvent()
+                                    val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (!ch.pressed) break
+                                    pick(ch.position)
+                                    ch.consume()
+                                }
                             }
                         }
                 ) {
@@ -235,27 +283,35 @@ fun CustomColorDialog(initial: Int, onPick: (String) -> Unit, onDismiss: () -> U
                     for (row in 0 until rows) for (col in 0 until cols) {
                         drawRect(Color(cells[row][col]), topLeft = Offset(col * cw, row * ch), size = Size(cw + 0.5f, ch + 0.5f))
                     }
+                    // Marker: The chosen color, with a ring in its negative color inside it.
+                    if (chosen != null && marker != null) {
+                        val (row, col) = marker
+                        val center = Offset((col + 0.5f) * cw, (row + 0.5f) * ch)
+                        val rad = minOf(cw, ch) * 0.95f
+                        val negative = Color(0xFF000000.toInt() or (chosen.inv() and 0xFFFFFF))
+                        drawCircle(Color(chosen), rad, center)
+                        drawCircle(negative, rad, center, style = Stroke(width = 1.5.dp.toPx()))
+                        drawCircle(negative, rad * 0.45f, center, style = Stroke(width = 2.dp.toPx()))
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(preview)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        if (valid) GoogleColors.customKey(ri!!, gi!!, bi!!) else "Each value: 0–255",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
+                Text(
+                    "Slide on the map, or type 0–255 or a hex code.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(Triple("R", r) { v: String -> r = v }, Triple("G", g) { v: String -> g = v }, Triple("B", b) { v: String -> b = v })
                         .forEach { (label, value, set) ->
                             OutlinedTextField(
                                 value = value,
-                                onValueChange = { v -> set(v.filter(Char::isDigit).take(3)) },
+                                onValueChange = { v ->
+                                    set(v.filter(Char::isDigit).take(3))
+                                    touched = null
+                                    val rr = r.toIntOrNull()?.takeIf { it in 0..255 }
+                                    val gg = g.toIntOrNull()?.takeIf { it in 0..255 }
+                                    val bb = b.toIntOrNull()?.takeIf { it in 0..255 }
+                                    if (rr != null && gg != null && bb != null) hex = hexOf((rr shl 16) or (gg shl 8) or bb)
+                                },
                                 label = { Text(label) },
                                 singleLine = true,
                                 isError = value.toIntOrNull()?.let { it !in 0..255 } ?: true,
@@ -264,6 +320,35 @@ fun CustomColorDialog(initial: Int, onPick: (String) -> Unit, onDismiss: () -> U
                             )
                         }
                 }
+                OutlinedTextField(
+                    value = hex,
+                    onValueChange = { v ->
+                        val f = v.removePrefix("#").filter { it.isDigit() || it.lowercaseChar() in 'a'..'f' }.take(6).uppercase()
+                        hex = f
+                        if (f.length == 6) {
+                            val c = f.toInt(16)
+                            r = ((c shr 16) and 0xFF).toString()
+                            g = ((c shr 8) and 0xFF).toString()
+                            b = (c and 0xFF).toString()
+                            touched = null
+                        }
+                    },
+                    label = { Text("Hex") },
+                    prefix = { Text("#") },
+                    leadingIcon = {
+                        Box(
+                            Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(if (chosen != null) Color(chosen) else Color.Transparent)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        )
+                    },
+                    singleLine = true,
+                    isError = hex.length != 6,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     )

@@ -176,7 +176,9 @@ class MonthWidget : AppWidgetProvider() {
                 val base = b.color
                 // Days of the neighbouring months: Same chips, half transparent.
                 val color = if (inMonth) base else (base and 0x00FFFFFF) or 0x80000000.toInt()
-                if (!inMonth) c.setTextColor(id, 0x99FFFFFF.toInt())
+                // White text, or black on light colors (yellow, white…); Dimmed on neighbouring months.
+                val text = GoogleColors.textOn(base)
+                c.setTextColor(id, if (inMonth) text else (text and 0x00FFFFFF) or 0x99000000.toInt())
                 if (Build.VERSION.SDK_INT >= 31) {
                     c.setColorStateList(id, "setBackgroundTintList", ColorStateList.valueOf(color))
                 } else {

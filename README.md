@@ -8,7 +8,8 @@ events from your Google account, export TimeBlock statistics for a given time pe
 
 ## TimeBlocks tab
 - **Your list:** `study` and `workout` to start with. Add, rename and remove TimeBlocks, each with a color: 11 presets
-  or any **Custom color…** (pick from the color grid or type R, G, B).
+  or any **Custom color…** (slide your finger on the color map, or type R, G, B
+  (0–255) or a hex code).
 - **Two modes:** **Timer** counts down from the hours and minutes you set (or a preset); **Stopwatch** counts up until
   you tap COMPLETE. Each TimeBlock remembers its own countdown as soon as you change it, also for the widget.
 - **Controls:** START locks every option; PAUSE/RESUME keeps them locked; STOP discards the TimeBlock and unlocks them.
