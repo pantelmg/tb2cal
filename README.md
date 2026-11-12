@@ -4,7 +4,7 @@ By [github.com/pantelmg](https://github.com/pantelmg)
 
 Create TimeBlocks, with your own conditions, to track and improve productivity. Completed TimeBlocks are registered in
 the app and the local Calendar. Use the app's widgets (Calendar and TimeBlock manager) for efficiency. Bonus: Import
-events from your Google account, export TimeBlock statistics for a given time period to PDF, set oals.
+events from your Google account, export TimeBlock statistics for a given time period to PDF, set Goals.
 
 ## TimeBlocks tab
 - **Your list:** `study` and `workout` to start with. Add, rename and remove TimeBlocks, each with a color: 11 presets
@@ -56,9 +56,9 @@ Every tab fits on one page; Only the Calendar day list and the Statistics and Go
 long.
 
 ## Widgets
-- **TimeBlock manager (4×1):** T/S (tap to switch Timer/Stopwatch), the TimeBlock (tap to cycle through your list),
-  then Start, Pause and Stop, always in the same place. In Stopwatch mode a boxed ✓ (Complete) appears left of Start.
-  Buttons that can't be used do nothing.
+- **TimeBlock manager (4×1):** ⏳/⏱ (hourglass for Timer, stopwatch for Stopwatch; tap to switch), the TimeBlock
+  (tap to cycle through your list), then Start, Pause and Stop, always in the same place. In Stopwatch mode a boxed ✓
+  (Complete) appears left of Start. Buttons that can't be used do nothing.
 - **Calendar (4×4 or larger):** The same month view as the Calendar tab. ‹ › change month, tap the month name for
   the current month, the TB icon opens TB2Cal, tap a day to open it in the app. Each day shows up to 3 entries at
   4 rows, 4 at 5 rows and 5 at 6 rows or taller, with +N next to the day number when there are more. Follows TB Total.

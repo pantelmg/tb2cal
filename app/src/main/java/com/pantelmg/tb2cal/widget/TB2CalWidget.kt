@@ -22,7 +22,7 @@ import com.pantelmg.tb2cal.service.TimeblockService
 import com.pantelmg.tb2cal.ui.MainActivity
 
 /**
- * TimeBlock manager widget (4×1): T/S · TimeBlock choice · (✓ in Stopwatch mode) · Start · Pause · Stop.
+ * TimeBlock manager widget (4×1): Mode (hourglass/stopwatch) · TimeBlock choice · (✓ in Stopwatch mode) · Start · Pause · Stop.
  * After a completion it shows "Completed! Tap to register." until the block is in the calendar.
  */
 class TB2CalWidget : AppWidgetProvider() {
@@ -110,10 +110,11 @@ class TB2CalWidget : AppWidgetProvider() {
             } else {
                 v.setViewVisibility(R.id.dot, View.GONE)
             }
-            v.setTextViewText(R.id.mode, if (mode == Mode.TIMER) "T" else "S")
+            v.setImageViewResource(R.id.mode, if (mode == Mode.TIMER) R.drawable.ic_w_hourglass else R.drawable.ic_w_stopwatch)
+            v.setContentDescription(R.id.mode, if (mode == Mode.TIMER) "Timer" else "Stopwatch")
 
             if (!s.active) {
-                // Idle: Tap the name to cycle TimeBlocks, tap T/S to switch mode.
+                // Idle: Tap the name to cycle TimeBlocks, tap the mode symbol to switch Timer/Stopwatch.
                 v.setViewVisibility(R.id.sub, View.VISIBLE)
                 v.setViewVisibility(R.id.time, View.GONE)
                 v.setTextViewText(
@@ -122,7 +123,7 @@ class TB2CalWidget : AppWidgetProvider() {
                     else "Stopwatch"
                 )
                 v.setTextColor(R.id.name, 0xFFFFFFFF.toInt())
-                v.setTextColor(R.id.mode, 0xFFFFFFFF.toInt())
+                v.setInt(R.id.mode, "setImageAlpha", FULL)
                 v.setOnClickPendingIntent(R.id.block, broadcast(ctx, ACTION_NEXT_BLOCK, 22))
                 v.setOnClickPendingIntent(R.id.mode, broadcast(ctx, ACTION_TOGGLE_MODE, 23))
 
@@ -146,7 +147,7 @@ class TB2CalWidget : AppWidgetProvider() {
                     v.setChronometer(R.id.time, now - s.elapsedMs(now), null, running)
                 }
                 v.setTextColor(R.id.name, 0x99FFFFFF.toInt())
-                v.setTextColor(R.id.mode, 0x99FFFFFF.toInt())
+                v.setInt(R.id.mode, "setImageAlpha", 153)
                 v.setOnClickPendingIntent(R.id.block, noop(ctx))
                 v.setOnClickPendingIntent(R.id.mode, noop(ctx))
 

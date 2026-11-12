@@ -13,16 +13,17 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
+        <!-- Mode: Hourglass (Timer) or stopwatch (Stopwatch); Tap to switch. -->
+        <ImageView
             android:id="@+id/mode"
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:layout_marginEnd="8dp"
             android:background="@drawable/widget_mode_bg"
-            android:gravity="center"
-            android:textColor="#FFFFFFFF"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            android:contentDescription="Mode"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_w_hourglass" />
 
         <LinearLayout
             android:id="@+id/block"
