@@ -50,6 +50,7 @@ class AlertService : Service() {
             return START_NOT_STICKY
         }
         test = intent?.getBooleanExtra(EXTRA_TEST, false) == true
+        testActive = test
         label = intent?.getStringExtra(EXTRA_LABEL) ?: ""
         blockId = intent?.getStringExtra(EXTRA_ID)
         val n = Notifications.completed(this, label, test, alerting = true, id = blockId)
@@ -198,6 +199,16 @@ class AlertService : Service() {
                 Notifications.post(ctx, Notifications.COMPLETE_ID, Notifications.completed(ctx, label, test, false, id))
                 releaseWake()
             }
+        }
+
+        /** True while the running alert is a "Test alert" from Settings. */
+        @Volatile
+        var testActive = false
+            private set
+
+        /** Stops the alert only if it's a test (leaving Settings); A real TimeBlock alert keeps going. */
+        fun stopTest(ctx: Context) {
+            if (running && testActive) stop(ctx, keepNotification = false)
         }
 
         /** Silences a running alert. With keepNotification = false, the notification is removed too. */

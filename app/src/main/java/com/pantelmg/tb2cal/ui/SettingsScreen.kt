@@ -8,6 +8,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,7 +85,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * Settings, styled like the app's tabs: Big bold title, then grouped cards with a round icon per row.
- * Completion alert (sound, volume, vibration, test) · Background reliability · Calendar access (only if missing).
+ * Completion alert (sound, volume, vibration, test) · Appearance (secondary color) · Background reliability ·
+ * Calendar access (only if missing).
  */
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
@@ -122,6 +129,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
         if (uri != null) useSound(uri)
     }
     val alertRunning by AlertService.runningFlow.collectAsState()
+    // Leaving Settings stops a running test alert (a real TimeBlock alert keeps going).
+    DisposableEffect(Unit) { onDispose { AlertService.stopTest(ctx) } }
+    val dark = isSystemInDarkTheme()
 
     val soundLabel = remember(settings.soundUri, settings.soundTitle) {
         when (val u = settings.soundUri) {
@@ -269,6 +279,59 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
             )
             Spacer(Modifier.width(8.dp))
             Text(if (alertRunning) "Stop alert" else "Test alert")
+        }
+
+        // ---- Appearance ----
+        SectionLabel("Appearance")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_palette),
+                title = "Secondary color",
+                subtitle = "Buttons, switches and highlights: " +
+                    (Accents.byKey(settings.accent)?.name ?: "Phone's colors")
+            )
+            // "Phone's colors" (wallpaper, the default) first, then the offered colors.
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val options: List<Accents.Accent?> = listOf<Accents.Accent?>(null) + Accents.all
+                options.forEach { a ->
+                    val key = a?.key ?: ""
+                    val chosen = settings.accent == key || (a == null && Accents.byKey(settings.accent) == null)
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .then(
+                                if (a == null) Modifier.background(
+                                    Brush.sweepGradient(
+                                        listOf(Color(0xFFD0BCFF), Color(0xFFAAC7FF), Color(0xFF82D5C8), Color(0xFFDCC66E), Color(0xFFFFB0CA), Color(0xFFD0BCFF))
+                                    )
+                                ) else Modifier.background(Color(if (dark) a.dark.primary else a.light.primary))
+                            )
+                            .border(
+                                if (chosen) 3.dp else 1.dp,
+                                if (chosen) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant,
+                                CircleShape
+                            )
+                            .clickable { Repo.updateSettings { it.copy(accent = key) } },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (chosen) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = a?.name ?: "Phone's colors",
+                                tint = if (a == null) Color.Black else Color(if (dark) a.dark.onPrimary else a.light.onPrimary),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // ---- Background ----

@@ -18,7 +18,10 @@ events from your Google account, export TimeBlock statistics for a given time pe
 - **Permanent notification** while a TimeBlock runs: Name, mode and live time, with Pause/Resume, Stop (and Complete in
   Stopwatch mode).
 - **Timer end alert:** Your own sound (or the default one), at the notification or the media volume, with vibration
-  Off, Short, Long or Pulse until stopped.
+  Off, Short, Long or Pulse until stopped. **Test alert** in Settings; It stops from its notification or when you leave
+  Settings.
+- **Secondary color** (Settings → Appearance): The phone's colors (default), or Purple, Blue, Teal, Green, Yellow,
+  Orange, Red or Pink for buttons, switches and highlights.
 - **Automatic registration:** Every completed TimeBlock (for example `1h20m study`) is saved the moment it finishes,
   in the app and in **TB2Cal's own calendar on the phone**, which your phone's calendar app shows. A TimeBlock can
   never be saved twice.
@@ -46,7 +49,7 @@ events from your Google account, export TimeBlock statistics for a given time pe
 - Every TimeBlock of your list: **Tap to set** opens hours and minutes; **Retap to save** saves the goal (0h 0m
   removes it). The bar shows how much of the goal is done, with **Z% of Goal** next to the name.
 - **N goals set in this time period:** The TimeBlocks with a goal of the period type shown.
-- **Apply onward ON/OFF** (one per period type, ON by default, remembered; Applied on retap to save): ON, a goal you
+- **Apply onward ON/OFF** (one per period type, ON by default, remembered; When ON: Applied on retap to save): ON, a goal you
   save repeats in every later period of that type; OFF, it's only for the period shown.
 
 Every tab fits on one page; Only the Calendar day list and the Statistics and Goals lists scroll, when they're too

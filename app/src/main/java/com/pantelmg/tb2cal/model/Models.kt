@@ -218,6 +218,8 @@ data class Settings(
     /** Goals tab: Last period, and the periods with "Apply onward" turned OFF (it's ON by default). */
     val goalsPeriod: String = "WEEKLY",
     val onwardOff: Set<String> = emptySet(),
+    /** App color for buttons, switches and highlights: "" = the phone's wallpaper colors, else an accent key. */
+    val accent: String = "",
 ) {
 
     /** Countdown minutes of a TimeBlock: Its own, or the default. */
@@ -237,6 +239,7 @@ data class Settings(
         .put("tbTotal", tbTotal).put("statsPeriod", statsPeriod).put("statsGraph", statsGraph)
         .put("goalsPeriod", goalsPeriod)
         .put("onwardOff", org.json.JSONArray().also { a -> onwardOff.forEach { a.put(it) } })
+        .put("accent", accent)
 
     companion object {
         val DEFAULT_PRESETS = listOf(15, 25, 45, 60, 90, 120)
@@ -270,6 +273,7 @@ data class Settings(
             statsPeriod = o.optString("statsPeriod").ifEmpty { "WEEKLY" },
             statsGraph = o.optBoolean("statsGraph"),
             goalsPeriod = o.optString("goalsPeriod").ifEmpty { "WEEKLY" },
+            accent = o.optString("accent"),
             onwardOff = o.optJSONArray("onwardOff")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
             permissionsAsked = o.optBoolean("permAsked"),
         )

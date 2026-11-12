@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,13 +63,72 @@ import com.pantelmg.tb2cal.model.GoogleColors
 fun TB2CalTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val ctx = LocalContext.current
-    val scheme = when {
+    val settings by com.pantelmg.tb2cal.data.Repo.settings.collectAsState()
+    val base = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         dark -> darkColorScheme(primary = Color(0xFF90CAF9), secondary = Color(0xFF80CBC4))
         else -> lightColorScheme(primary = Color(0xFF1565C0), secondary = Color(0xFF00897B))
     }
+    // A chosen app color replaces the accent roles (buttons, switches, selections); Backgrounds stay as they are.
+    val scheme = Accents.byKey(settings.accent)?.let { a ->
+        val t = if (dark) a.dark else a.light
+        base.copy(
+            primary = Color(t.primary),
+            onPrimary = Color(t.onPrimary),
+            primaryContainer = Color(t.primaryContainer),
+            onPrimaryContainer = Color(t.onPrimaryContainer),
+            inversePrimary = Color(if (dark) a.light.primary else a.dark.primary),
+            secondary = Color(t.primary),
+            onSecondary = Color(t.onPrimary),
+            secondaryContainer = Color(t.secondaryContainer),
+            onSecondaryContainer = Color(t.onSecondaryContainer),
+            surfaceTint = Color(t.primary),
+        )
+    } ?: base
     MaterialTheme(colorScheme = scheme, content = content)
+}
+
+/** The app colors offered in Settings (Material tones for dark and light mode). */
+object Accents {
+    class Tones(
+        val primary: Int, val onPrimary: Int, val primaryContainer: Int, val onPrimaryContainer: Int,
+        val secondaryContainer: Int, val onSecondaryContainer: Int,
+    )
+
+    class Accent(val key: String, val name: String, val dark: Tones, val light: Tones)
+
+    private fun t(p: Long, op: Long, pc: Long, opc: Long, sc: Long, osc: Long) =
+        Tones(p.toInt(), op.toInt(), pc.toInt(), opc.toInt(), sc.toInt(), osc.toInt())
+
+    val all = listOf(
+        Accent("purple", "Purple",
+            t(0xFFD0BCFF, 0xFF381E72, 0xFF4F378B, 0xFFEADDFF, 0xFF4A4458, 0xFFE8DEF8),
+            t(0xFF6750A4, 0xFFFFFFFF, 0xFFEADDFF, 0xFF21005D, 0xFFE8DEF8, 0xFF1D192B)),
+        Accent("blue", "Blue",
+            t(0xFFAAC7FF, 0xFF0A305F, 0xFF284777, 0xFFD6E3FF, 0xFF3E4759, 0xFFDAE2F9),
+            t(0xFF415F91, 0xFFFFFFFF, 0xFFD6E3FF, 0xFF001B3E, 0xFFDAE2F9, 0xFF131C2B)),
+        Accent("teal", "Teal",
+            t(0xFF82D5C8, 0xFF003731, 0xFF005048, 0xFFA4F2E4, 0xFF334B47, 0xFFCCE8E2),
+            t(0xFF006A60, 0xFFFFFFFF, 0xFFA4F2E4, 0xFF00201C, 0xFFCCE8E2, 0xFF051F1C)),
+        Accent("green", "Green",
+            t(0xFFA1D39A, 0xFF0A390F, 0xFF235024, 0xFFBCF0B4, 0xFF3A4B39, 0xFFD2E8CE),
+            t(0xFF3B6939, 0xFFFFFFFF, 0xFFBCF0B4, 0xFF002204, 0xFFD2E8CE, 0xFF0F1F0F)),
+        Accent("yellow", "Yellow",
+            t(0xFFDCC66E, 0xFF3A3000, 0xFF534600, 0xFFF9E287, 0xFF4E472A, 0xFFECE2BC),
+            t(0xFF6D5E0F, 0xFFFFFFFF, 0xFFF8E287, 0xFF221B00, 0xFFEEE2BC, 0xFF201C05)),
+        Accent("orange", "Orange",
+            t(0xFFFFB689, 0xFF512300, 0xFF6F3911, 0xFFFFDBC8, 0xFF5B4132, 0xFFFFDBC8),
+            t(0xFF8B4F24, 0xFFFFFFFF, 0xFFFFDBC8, 0xFF321200, 0xFFFFDBC8, 0xFF2B160A)),
+        Accent("red", "Red",
+            t(0xFFFFB3AD, 0xFF571E1B, 0xFF73332F, 0xFFFFDAD6, 0xFF5D3F3C, 0xFFFFDAD6),
+            t(0xFF904A45, 0xFFFFFFFF, 0xFFFFDAD6, 0xFF3B0908, 0xFFFFDAD6, 0xFF2C1513)),
+        Accent("pink", "Pink",
+            t(0xFFFFB0CA, 0xFF541D33, 0xFF6F3349, 0xFFFFD9E3, 0xFF5A3F47, 0xFFFFD9E3),
+            t(0xFF8C4A60, 0xFFFFFFFF, 0xFFFFD9E3, 0xFF3A071D, 0xFFFFD9E3, 0xFF2B151C)),
+    )
+
+    fun byKey(key: String?): Accent? = all.firstOrNull { it.key == key }
 }
 
 /**
