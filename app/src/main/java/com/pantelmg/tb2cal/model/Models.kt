@@ -220,6 +220,17 @@ data class Settings(
     val onwardOff: Set<String> = emptySet(),
     /** App color for buttons, switches and highlights: "" = the phone's wallpaper colors, else an accent key. */
     val accent: String = "",
+    /** Calendar tab: TimeBlocks/events shown per day in the month grid (3, 4 or 5). */
+    val dayEntries: Int = 3,
+    /** Gmail account whose events are shown; "" = the most likely one (most events). */
+    val gmailAccount: String = "",
+    /** Multi-language (holiday) calendars turned off, by their calendar id (e.g. "en.greek#holiday@…"). */
+    val holidayOff: Set<String> = emptySet(),
+    /** Calendar tab: Hide next to Gmail events. Hidden: Whole events (all repeats) by event id, and single days of
+     *  repeating events as "eventId@instanceStartMs". */
+    val allowHide: Boolean = false,
+    val hiddenEvents: Set<Long> = emptySet(),
+    val hiddenInstances: Set<String> = emptySet(),
 ) {
 
     /** Countdown minutes of a TimeBlock: Its own, or the default. */
@@ -240,6 +251,10 @@ data class Settings(
         .put("goalsPeriod", goalsPeriod)
         .put("onwardOff", org.json.JSONArray().also { a -> onwardOff.forEach { a.put(it) } })
         .put("accent", accent)
+        .put("dayEntries", dayEntries).put("gmailAccount", gmailAccount).put("allowHide", allowHide)
+        .put("holidayOff", org.json.JSONArray().also { a -> holidayOff.forEach { a.put(it) } })
+        .put("hidden", org.json.JSONArray().also { a -> hiddenEvents.forEach { a.put(it) } })
+        .put("hiddenOnce", org.json.JSONArray().also { a -> hiddenInstances.forEach { a.put(it) } })
 
     companion object {
         val DEFAULT_PRESETS = listOf(15, 25, 45, 60, 90, 120)
@@ -274,6 +289,12 @@ data class Settings(
             statsGraph = o.optBoolean("statsGraph"),
             goalsPeriod = o.optString("goalsPeriod").ifEmpty { "WEEKLY" },
             accent = o.optString("accent"),
+            dayEntries = o.optInt("dayEntries", 3).coerceIn(3, 5),
+            gmailAccount = o.optString("gmailAccount"),
+            allowHide = o.optBoolean("allowHide"),
+            holidayOff = o.optJSONArray("holidayOff")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
+            hiddenEvents = o.optJSONArray("hidden")?.let { a -> List(a.length()) { a.optLong(it) }.toSet() } ?: emptySet(),
+            hiddenInstances = o.optJSONArray("hiddenOnce")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
             onwardOff = o.optJSONArray("onwardOff")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
             permissionsAsked = o.optBoolean("permAsked"),
         )

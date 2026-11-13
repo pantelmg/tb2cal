@@ -18,7 +18,16 @@ import java.util.TimeZone
 data class CalInfo(val id: Long, val name: String)
 
 /** An event read from the phone's Gmail calendars ("Sync with your Gmail"). Read-only. */
-data class GmailEvent(val title: String, val beginMs: Long, val endMs: Long, val allDay: Boolean, val color: Int)
+data class GmailEvent(
+    val title: String, val beginMs: Long, val endMs: Long, val allDay: Boolean, val color: Int,
+    /** The event (all its repeats share it); Used for hiding. */
+    val eventId: Long,
+    /** A repeating event (or a changed day of one). */
+    val repeats: Boolean = false,
+)
+
+/** A calendar that publishes the same events in one language (Google's holiday calendars). */
+data class LanguageCalendar(val key: String, val language: String, val name: String)
 
 /**
  * The phone's calendar storage. Completed TimeBlocks go into TB2Cal's own local calendar, which the
@@ -120,10 +129,6 @@ object CalendarWriter {
     }
 
     /**
-     * Events of every Gmail account on the phone between [fromMs] and [toMs], recurring ones
-     * expanded. They come from the phone's own copy, kept up to date by Android's account sync.
-     */
-    /**
      * The phone's calendar storage keeps Gmail colors in the old ("classic") palette, e.g. Peacock as pale cyan
      * #46D6DB. Google's calendar app shows them in the current palette, so they're translated the same way.
      * Colors outside both palettes (custom colors) are shown as they are.
@@ -174,12 +179,91 @@ object CalendarWriter {
         return (MODERN[rgb] ?: rgb) or 0xFF000000.toInt()
     }
 
-    fun gmailEvents(ctx: Context, fromMs: Long, toMs: Long): List<GmailEvent> {
+    private fun accountNames(ctx: Context): Set<String> = ctx.contentResolver.query(
+        Calendars.CONTENT_URI, arrayOf(Calendars.ACCOUNT_NAME),
+        "${Calendars.ACCOUNT_TYPE}=?", arrayOf(GMAIL_TYPE), null
+    )?.use { c -> buildSet { while (c.moveToNext()) c.getString(0)?.let { add(it) } } }.orEmpty()
+
+    // The ranking counts events, so it's reused for a minute (the calendar and widget redraw often).
+    private var ranked: List<String> = emptyList()
+    private var rankedAt = 0L
+
+    /** Gmail accounts with calendars on the phone, most likely first (the one with the most events). Blocking. */
+    fun gmailAccounts(ctx: Context): List<String> {
         if (!hasPermission(ctx)) return emptyList()
+        val names = accountNames(ctx)
+        val now = System.currentTimeMillis()
+        if (now - rankedAt < 60_000L && ranked.toSet() == names) return ranked
+        val counts = names.associateWith { name ->
+            runCatching {
+                ctx.contentResolver.query(
+                    Events.CONTENT_URI, arrayOf(Events._ID),
+                    "${Events.ACCOUNT_NAME}=? AND ${Events.ACCOUNT_TYPE}=? AND ${Events.DELETED}=0",
+                    arrayOf(name, GMAIL_TYPE), null
+                )?.use { it.count } ?: 0
+            }.getOrDefault(0)
+        }
+        return names.sortedWith(compareByDescending<String> { counts[it] ?: 0 }.thenBy { it }).also {
+            ranked = it
+            rankedAt = now
+        }
+    }
+
+    /** The account to show: The chosen one if it's still on the phone, else the most likely one. Blocking. */
+    fun effectiveAccount(ctx: Context, chosen: String): String? {
+        if (!hasPermission(ctx)) return null
+        if (chosen.isNotEmpty() && chosen in accountNames(ctx)) return chosen
+        return gmailAccounts(ctx).firstOrNull()
+    }
+
+    private fun isLanguageCalendar(key: String) = key.contains("#holiday@group.v.calendar.google.com")
+
+    /** The account's multi-language calendars (e.g. holidays in Greek and in English). Blocking. */
+    fun languageCalendars(ctx: Context, account: String): List<LanguageCalendar> {
+        if (!hasPermission(ctx)) return emptyList()
+        val out = mutableListOf<LanguageCalendar>()
+        runCatching {
+            ctx.contentResolver.query(
+                Calendars.CONTENT_URI,
+                arrayOf(Calendars.OWNER_ACCOUNT, Calendars._SYNC_ID, Calendars.CALENDAR_DISPLAY_NAME),
+                "${Calendars.ACCOUNT_NAME}=? AND ${Calendars.ACCOUNT_TYPE}=? AND ${Calendars.VISIBLE}=1",
+                arrayOf(account, GMAIL_TYPE), null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val key = listOfNotNull(c.getString(0), c.getString(1)).firstOrNull { isLanguageCalendar(it) } ?: continue
+                    val code = key.substringBefore('.')
+                    val lang = java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH)
+                        .ifBlank { code }
+                    out += LanguageCalendar(key, lang, c.getString(2) ?: key)
+                }
+            }
+        }
+        return out.distinctBy { it.key }.sortedBy { it.language }
+    }
+
+    /**
+     * Events of one Gmail account (the chosen or most likely one) between [fromMs] and [toMs], recurring ones
+     * expanded, skipping the language calendars in [languagesOff]. They come from the phone's own copy, kept up to
+     * date by Android's account sync. Blocking.
+     */
+    fun gmailEvents(
+        ctx: Context, fromMs: Long, toMs: Long, chosenAccount: String = "", languagesOff: Set<String> = emptySet(),
+    ): List<GmailEvent> {
+        if (!hasPermission(ctx)) return emptyList()
+        val account = effectiveAccount(ctx, chosenAccount) ?: return emptyList()
         val calIds = ctx.contentResolver.query(
-            Calendars.CONTENT_URI, arrayOf(Calendars._ID),
-            "${Calendars.ACCOUNT_TYPE}=? AND ${Calendars.VISIBLE}=1", arrayOf(GMAIL_TYPE), null
-        )?.use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }.orEmpty()
+            Calendars.CONTENT_URI, arrayOf(Calendars._ID, Calendars.OWNER_ACCOUNT, Calendars._SYNC_ID),
+            "${Calendars.ACCOUNT_NAME}=? AND ${Calendars.ACCOUNT_TYPE}=? AND ${Calendars.VISIBLE}=1",
+            arrayOf(account, GMAIL_TYPE), null
+        )?.use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    val keys = listOfNotNull(c.getString(1), c.getString(2))
+                    if (keys.any { isLanguageCalendar(it) && it in languagesOff }) continue
+                    add(c.getLong(0))
+                }
+            }
+        }.orEmpty()
         if (calIds.isEmpty()) return emptyList()
 
         val uri = Instances.CONTENT_URI.buildUpon().also {
@@ -190,7 +274,10 @@ object CalendarWriter {
         runCatching {
             ctx.contentResolver.query(
                 uri,
-                arrayOf(Instances.TITLE, Instances.BEGIN, Instances.END, Instances.ALL_DAY, Instances.DISPLAY_COLOR),
+                arrayOf(
+                    Instances.TITLE, Instances.BEGIN, Instances.END, Instances.ALL_DAY, Instances.DISPLAY_COLOR,
+                    Instances.EVENT_ID, Instances.RRULE, Instances.RDATE, Instances.ORIGINAL_ID
+                ),
                 "${Instances.CALENDAR_ID} IN (${calIds.joinToString(",")})", null,
                 "${Instances.BEGIN} ASC"
             )?.use { c ->
@@ -201,6 +288,8 @@ object CalendarWriter {
                         endMs = c.getLong(2),
                         allDay = !c.isNull(3) && c.getInt(3) == 1,
                         color = if (c.isNull(4)) 0xFF1565C0.toInt() else shownColor(c.getInt(4)),
+                        eventId = c.getLong(5),
+                        repeats = !c.getString(6).isNullOrBlank() || !c.getString(7).isNullOrBlank() || !c.isNull(8),
                     )
                 }
             }

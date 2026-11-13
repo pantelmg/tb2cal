@@ -293,7 +293,7 @@ fun MainScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Keep TimeBlocks running", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "$reliabilityIssues setting(s) may let ${Reliability.oemName} stop a running timer. Tap to fix.",
+                            "$reliabilityIssues setting(s) may let Android stop a running timer. Tap to fix.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }

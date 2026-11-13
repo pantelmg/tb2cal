@@ -42,6 +42,14 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import com.pantelmg.tb2cal.calendar.LanguageCalendar
+import androidx.compose.runtime.produceState
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -88,6 +96,7 @@ import kotlinx.coroutines.withContext
  * Completion alert (sound, volume, vibration, test) · Appearance (secondary color) · Background reliability ·
  * Calendar access (only if missing).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
     val ctx = LocalContext.current
@@ -133,6 +142,16 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
     DisposableEffect(Unit) { onDispose { AlertService.stopTest(ctx) } }
     val dark = isSystemInDarkTheme()
 
+    // Gmail accounts (most likely first) and the chosen account's multi-language calendars, read off the main thread.
+    val accounts by produceState(emptyList<String>(), hasCalPerm) {
+        value = withContext(Dispatchers.IO) { runCatching { CalendarWriter.gmailAccounts(ctx) }.getOrDefault(emptyList()) }
+    }
+    val account = settings.gmailAccount.takeIf { it in accounts } ?: accounts.firstOrNull()
+    val languages by produceState(emptyList<LanguageCalendar>(), account, hasCalPerm) {
+        value = if (account == null) emptyList()
+        else withContext(Dispatchers.IO) { runCatching { CalendarWriter.languageCalendars(ctx, account) }.getOrDefault(emptyList()) }
+    }
+
     val soundLabel = remember(settings.soundUri, settings.soundTitle) {
         when (val u = settings.soundUri) {
             "" -> "Silent"
@@ -175,7 +194,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         Text(
-            "Completion alert, secondary color and background reliability.",
+            "Completion alert, secondary color, calendar preferences and background reliability.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -334,13 +353,90 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
             }
         }
 
+        // ---- Calendar preferences ----
+        SectionLabel("Calendar preferences")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.DateRange),
+                title = "In-app Calendar: TimeBlocks/day",
+                subtitle = "Widget calendar's TimeBlock capacity increases with its size."
+            )
+            SingleChoiceSegmentedButtonRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp)
+            ) {
+                listOf(3, 4, 5).forEachIndexed { i, n ->
+                    SegmentedButton(
+                        selected = settings.dayEntries == n,
+                        onClick = { Repo.updateSettings { it.copy(dayEntries = n) } },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 3)
+                    ) { Text("$n") }
+                }
+            }
+            RowDivider()
+
+            // 1. Which Gmail account (the most likely one first and picked until you choose).
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.Email),
+                title = "Gmail account",
+                subtitle = "Its events are shown when Sync with your Gmail is on."
+            )
+            Column(Modifier.padding(start = 56.dp, end = 8.dp, bottom = 8.dp)) {
+                when {
+                    !hasCalPerm -> Hint("Needs calendar access.")
+                    accounts.isEmpty() -> Hint("No Google account with a calendar on this phone.")
+                    else -> accounts.forEach { a ->
+                        ChoiceRow(a, selected = a == account, radio = true) {
+                            Repo.updateSettings { it.copy(gmailAccount = a) }
+                        }
+                    }
+                }
+            }
+            RowDivider()
+
+            // 2. Languages of the calendars that publish the same events in several languages (e.g. holidays).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_language),
+                title = "Gmail import: Languages",
+                subtitle = "For events in several languages, like holidays. Pick any, or none; Your other events " +
+                    "are always shown."
+            )
+            Column(Modifier.padding(start = 56.dp, end = 8.dp, bottom = 8.dp)) {
+                if (languages.isEmpty()) Hint("This account has no events in several languages.")
+                languages.forEach { l ->
+                    ChoiceRow("${l.language} · ${l.name}", selected = l.key !in settings.holidayOff, radio = false) {
+                        Repo.updateSettings {
+                            it.copy(holidayOff = if (l.key in it.holidayOff) it.holidayOff - l.key else it.holidayOff + l.key)
+                        }
+                    }
+                }
+            }
+            RowDivider()
+
+            // 3. Hiding Gmail events (Hide next to them in the Calendar tab).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_hide),
+                title = "Allow hiding Gmail events",
+                subtitle = "Hide appears next to Gmail events in the Calendar tab. Hidden events come back when " +
+                    "Sync with your Gmail is turned off and on.",
+                onClick = { Repo.updateSettings { it.copy(allowHide = !it.allowHide) } },
+                trailing = {
+                    Switch(
+                        checked = settings.allowHide,
+                        onCheckedChange = { v -> Repo.updateSettings { it.copy(allowHide = v) } }
+                    )
+                }
+            )
+        }
+
         // ---- Background ----
         SectionLabel("Background")
         Card(Modifier.fillMaxWidth()) {
             SettingRow(
                 icon = painterResource(R.drawable.ic_s_shield),
                 title = "Background reliability",
-                subtitle = "Keep ${Reliability.oemName}'s battery manager from stopping running TimeBlocks.",
+                subtitle = "Keep Android's battery manager from stopping running TimeBlocks.",
                 onClick = onOpenReliability,
                 trailing = { Chevron() }
             )
@@ -457,4 +553,31 @@ private fun RowDivider() {
         Modifier.padding(start = 72.dp, end = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     )
+}
+
+@Composable
+private fun Hint(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 6.dp)
+    )
+}
+
+/** A radio (one choice) or checkbox (any number) row, tappable as a whole. */
+@Composable
+private fun ChoiceRow(text: String, selected: Boolean, radio: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (radio) RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(8.dp))
+        else Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(8.dp))
+        Text(text, style = MaterialTheme.typography.bodyLarge)
+    }
 }

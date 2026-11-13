@@ -27,13 +27,24 @@ events from your Google account, export TimeBlock statistics for a given time pe
   never be saved twice.
 
 ## Calendar tab
-- Month view of your completed TimeBlocks. Tap a day to see its list, under its short date (e.g. `Mon 15/12/26`).
+- Month view of your completed TimeBlocks, 3, 4 or 5 per day (Settings). Tap a day to see its list, under its short
+  date (e.g. `Mon 15/12/26`).
 - **TB Total ON/OFF** (OFF by default, remembered): Merges same-name TimeBlocks of a day into one
   total, in the order of the first of each name, in the grid, the list (marked *TimeBlock Total*) and the widget.
 - The bin next to a TimeBlock deletes it from the app and from TB2Cal's phone calendar (after you confirm). On a
   TB Total entry it deletes every TimeBlock of that name on that day.
-- **Sync with your Gmail** (off by default): Also shows the events of the Google accounts on the phone, read-only and
+- **Sync with your Gmail** (off by default): Also shows the events of a Google account on the phone, read-only and
   instantly, in the same colors as Google's calendar app.
+
+### Calendar preferences (Settings)
+- **In-app Calendar: TimeBlocks/day:** 3 (default), 4 or 5. The widget's capacity grows with its size instead.
+- **Gmail account:** Which account's events are shown; The one with the most events is first and picked by default.
+- **Gmail import: Languages:** Calendars that publish the same events in several languages (like Google's holidays
+  in Greek and in English) can be picked one by one, or none. Your other events are always shown.
+- **Allow hiding Gmail events** (off by default): A Hide button next to Gmail events in the Calendar tab hides the
+  event (here and on the widget; Your Google account isn't changed). For a repeating event it then asks: All repeating
+  events, or On this day only. Turning Sync with your Gmail off
+  and on brings them back; Turning Allow hiding off shows them while it's off.
 
 ## Statistics tab
 - **Daily, Weekly, Monthly and Yearly** totals per TimeBlock name; ‹ › go to earlier or later periods. The period and
@@ -63,7 +74,7 @@ long.
   the current month, the TB icon opens TB2Cal, tap a day to open it in the app. Each day shows up to 3 entries at
   4 rows, 4 at 5 rows and 5 at 6 rows or taller, with +N next to the day number when there are more. Follows TB Total.
 
-## Staying alive on Xiaomi and other strict phones
+## Staying alive when Android stops apps
 - Foreground service with a permanent notification; An exact alarm-clock alarm for the timer end; A heartbeat alarm
   every 10 minutes; Restart after reboot, app update or being swiped away. Nothing is lost if the app is killed.
 - **Settings → Background reliability** walks you through the phone settings: Notifications, calendar access,

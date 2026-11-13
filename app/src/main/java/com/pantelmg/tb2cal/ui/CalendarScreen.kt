@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import com.pantelmg.tb2cal.R
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Column
@@ -116,7 +118,10 @@ fun CalendarScreen() {
     val gridEnd = gridStart.plusDays(42)
 
     var byDay by remember { mutableStateOf<Map<LocalDate, List<DayItem>>>(emptyMap()) }
-    LaunchedEffect(gridStart, history, settings.gmailView, tick) {
+    LaunchedEffect(
+        gridStart, history, settings.gmailView, settings.gmailAccount, settings.holidayOff,
+        settings.allowHide, settings.hiddenEvents, settings.hiddenInstances, tick
+    ) {
         byDay = withContext(Dispatchers.IO) {
             runCatching { CalendarData.byDay(ctx, gridStart, gridEnd) }.getOrDefault(emptyMap())
         }
@@ -126,8 +131,13 @@ fun CalendarScreen() {
     val shownByDay = remember(byDay, settings.tbTotal) { CalendarData.shown(byDay, settings.tbTotal) }
 
     val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        if (CalendarWriter.hasPermission(ctx)) Repo.updateSettings { it.copy(gmailView = true) }
+        if (CalendarWriter.hasPermission(ctx)) Repo.updateSettings {
+            it.copy(gmailView = true, hiddenEvents = emptySet(), hiddenInstances = emptySet())
+        }
     }
+    var toHide by remember { mutableStateOf<DayItem?>(null) }
+    // Repeating event: After the first prompt, all repeats or this day only.
+    var hideScope by remember { mutableStateOf<DayItem?>(null) }
 
     Column(
         Modifier
@@ -141,7 +151,7 @@ fun CalendarScreen() {
             Column(horizontalAlignment = Alignment.End) {
                 Text("Sync with your Gmail", style = MaterialTheme.typography.labelLarge)
                 Text(
-                    if (settings.gmailView) "Shown here, read-only" else "Off",
+                    if (settings.gmailView) "Shown here, read-only" else "OFF",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -151,7 +161,10 @@ fun CalendarScreen() {
                 checked = settings.gmailView,
                 onCheckedChange = { on ->
                     if (!on) Repo.updateSettings { it.copy(gmailView = false) }
-                    else if (CalendarWriter.hasPermission(ctx)) Repo.updateSettings { it.copy(gmailView = true) }
+                    // Turning Sync on again brings back the Gmail events that were hidden.
+                    else if (CalendarWriter.hasPermission(ctx)) Repo.updateSettings {
+                        it.copy(gmailView = true, hiddenEvents = emptySet(), hiddenInstances = emptySet())
+                    }
                     else calPerm.launch(CalendarWriter.PERMS)
                 }
             )
@@ -197,11 +210,14 @@ fun CalendarScreen() {
         // Each cell: Day number (with +N at the right when more) on top, then up to 3 TimeBlocks/events.
         // Sizes come from the cell height (not the phone's font size), so all of it always fits.
         val line = MaterialTheme.colorScheme.outlineVariant
-        BoxWithConstraints(Modifier.weight(0.66f).fillMaxWidth()) {
+        // Entries per day (Settings): 3 or 4 fit the usual grid; 5 gets a taller grid (and a shorter day list).
+        val perDay = settings.dayEntries.coerceIn(3, 5)
+        val gridShare = if (perDay == 5) 0.76f else 0.66f
+        BoxWithConstraints(Modifier.weight(gridShare).fillMaxWidth()) {
         val density = LocalDensity.current
         val cellH = maxHeight / 6
-        val headH = (cellH * 0.3f).coerceIn(12.dp, 20.dp)
-        val chipH = ((cellH - headH - 2.dp) / 3).coerceIn(7.dp, 16.dp)
+        val headH = (cellH * (if (perDay == 3) 0.3f else 0.25f)).coerceIn(12.dp, 20.dp)
+        val chipH = ((cellH - headH - 2.dp) / perDay).coerceIn(7.dp, 16.dp)
         val chipLine = with(density) { (chipH - 1.dp).toSp() }
         val chipFont = with(density) { ((chipH - 1.dp) * 0.82f).toSp() }
         val headFont = with(density) { (headH * 0.62f).toSp() }
@@ -244,9 +260,9 @@ fun CalendarScreen() {
                                         }
                                     )
                                 }
-                                if (items.size > 3) {
+                                if (items.size > perDay) {
                                     Text(
-                                        "+${items.size - 3}",
+                                        "+${items.size - perDay}",
                                         fontSize = chipFont,
                                         lineHeight = chipFont,
                                         maxLines = 1,
@@ -255,7 +271,7 @@ fun CalendarScreen() {
                                     )
                                 }
                             }
-                            items.take(3).forEach { item ->
+                            items.take(perDay).forEach { item ->
                                 Text(
                                     item.label,
                                     fontSize = chipFont,
@@ -313,7 +329,7 @@ fun CalendarScreen() {
             }
         }
         // Only this list scrolls (and only if it doesn't fit).
-        LazyColumn(Modifier.weight(0.34f).fillMaxWidth()) {
+        LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth()) {
             if (dayItems.isEmpty()) {
                 item {
                     Text(
@@ -339,15 +355,62 @@ fun CalendarScreen() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    // TimeBlocks can be deleted; Gmail events are read-only.
+                    // TimeBlocks can be deleted; Gmail events are read-only, but can be hidden (Settings).
                     if (item.isTimeBlock) {
                         IconButton(onClick = { toDelete = item }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete ${item.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else if (settings.allowHide && item.eventId != null) {
+                        IconButton(onClick = { toHide = item }) {
+                            Icon(painterResource(R.drawable.ic_s_hide), contentDescription = "Hide ${item.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
         }
+    }
+
+    toHide?.let { item ->
+        AlertDialog(
+            onDismissRequest = { toHide = null },
+            title = { Text("Hide ${item.label}?") },
+            text = {
+                Text(
+                    "It's hidden here and on the Calendar widget. Your Google account isn't changed. Hidden events " +
+                        "come back when you turn Sync with your Gmail off and on, or turn off Allow hiding in Settings."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = item.eventId
+                    toHide = null
+                    if (item.repeats) hideScope = item
+                    else if (id != null) Repo.updateSettings { it.copy(hiddenEvents = it.hiddenEvents + id) }
+                }) { Text("Hide") }
+            },
+            dismissButton = { TextButton(onClick = { toHide = null }) { Text("Cancel") } }
+        )
+    }
+
+    hideScope?.let { item ->
+        val id = item.eventId
+        AlertDialog(
+            onDismissRequest = { hideScope = null },
+            title = { Text("${item.label} repeats") },
+            text = { Text("Hide all its repeating events, or on this day only?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    hideScope = null
+                    if (id != null) Repo.updateSettings { it.copy(hiddenEvents = it.hiddenEvents + id) }
+                }) { Text("All repeating events") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    hideScope = null
+                    if (id != null) Repo.updateSettings { it.copy(hiddenInstances = it.hiddenInstances + "$id@${item.startMs}") }
+                }) { Text("On this day only") }
+            }
+        )
     }
 
     toDelete?.let { item ->

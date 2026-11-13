@@ -86,7 +86,7 @@ fun ReliabilityScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "${Reliability.oemName} can stop apps running in the background. These settings keep the " +
+                "Android can stop apps running in the background. These settings keep the " +
                     "timer, its notification and the completion alert alive with the screen off or after " +
                     "clearing Recents. Items with a checkbox can't be detected — Tick them once done.",
                 style = MaterialTheme.typography.bodyMedium,

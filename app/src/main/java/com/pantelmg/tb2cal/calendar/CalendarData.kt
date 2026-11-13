@@ -23,6 +23,9 @@ data class DayItem(
     val activeMs: Long = 0,
     /** TB Total: The TimeBlocks merged into this one (empty when not merged). */
     val parts: List<DayItem> = emptyList(),
+    /** Gmail events only: The event's id (shared by all its repeats), for hiding, and whether it repeats. */
+    val eventId: Long? = null,
+    val repeats: Boolean = false,
 )
 
 /**
@@ -88,10 +91,18 @@ object CalendarData {
         }
 
         // Gmail events (read-only), skipping TimeBlocks that were once copied there
-        if (Repo.settings.value.gmailView) {
-            CalendarWriter.gmailEvents(ctx, fromMs - 86_400_000L, toMs + 86_400_000L).forEach { e ->
-                if ((e.title to e.beginMs) in blockKeys) return@forEach
-                val item = DayItem(e.title, e.color, e.beginMs, e.endMs, e.allDay, isTimeBlock = false)
+        // Only the chosen account, without the languages turned off, and without hidden events (when hiding is on).
+        val st = Repo.settings.value
+        if (st.gmailView) {
+            val hidden = if (st.allowHide) st.hiddenEvents else emptySet()
+            val hiddenOnce = if (st.allowHide) st.hiddenInstances else emptySet()
+            CalendarWriter.gmailEvents(ctx, fromMs - 86_400_000L, toMs + 86_400_000L, st.gmailAccount, st.holidayOff)
+                .forEach { e ->
+                if ((e.title to e.beginMs) in blockKeys || e.eventId in hidden || "${e.eventId}@${e.beginMs}" in hiddenOnce) return@forEach
+                val item = DayItem(
+                    e.title, e.color, e.beginMs, e.endMs, e.allDay, isTimeBlock = false,
+                    eventId = e.eventId, repeats = e.repeats
+                )
                 if (e.allDay) {
                     // All-day events are stored in UTC midnights and may span several days.
                     var d = Instant.ofEpochMilli(e.beginMs).atZone(ZoneOffset.UTC).toLocalDate()
