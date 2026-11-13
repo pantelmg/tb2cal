@@ -141,19 +141,25 @@ fun CompletionScreen(onDone: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
                     if (c.registered) {
                         Text(
-                            "✓ Registered in the app and the calendar",
+                            "✓ Registered",
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
                         c.eventId?.let { eventId ->
                             TextButton(onClick = {
+                                // Always asks which calendar app to open it in (every one that can, except TB2Cal).
                                 runCatching {
+                                    val view = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId))
                                     ctx.startActivity(
-                                        Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId))
+                                        Intent.createChooser(view, "Open in another calendar app")
+                                            .putExtra(
+                                                Intent.EXTRA_EXCLUDE_COMPONENTS,
+                                                arrayOf(android.content.ComponentName(ctx, MainActivity::class.java))
+                                            )
                                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     )
                                 }
-                            }) { Text("Open in the phone's calendar") }
+                            }) { Text("Open in another calendar app…") }
                         }
                     } else {
                         Text(status[c.id] ?: "Waiting for the calendar…", style = MaterialTheme.typography.bodyMedium)
