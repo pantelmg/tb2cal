@@ -48,6 +48,20 @@ object Reliability {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
             ctx.getSystemService(ActivityManager::class.java)?.isBackgroundRestricted == true
 
+    /**
+     * Android 11+: Not subject to "Pause app activity if unused" / "Remove permissions if app is unused"
+     * (which takes away permissions, notifications included, from apps not opened for a few months).
+     */
+    fun unusedExempt(ctx: Context) =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            runCatching { ctx.packageManager.isAutoRevokeWhitelisted }.getOrDefault(true)
+
+    fun openUnusedAppSettings(ctx: Context) = tryStart(
+        ctx,
+        Intent("android.intent.action.AUTO_REVOKE_PERMISSIONS", Uri.parse("package:${ctx.packageName}")),
+        appDetails(ctx),
+    )
+
     fun exactAlarmsOk(ctx: Context) =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             ctx.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
@@ -61,7 +75,9 @@ object Reliability {
         !batteryUnrestricted(ctx),
         backgroundRestricted(ctx),
         !exactAlarmsOk(ctx),
+        !unusedExempt(ctx),
         hasAutostartManager && !s.ackAutostart,
+        isXiaomi && !s.ackFloating,
         isXiaomi && !s.ackBatterySaver,
         gmail && !syncOk(ctx),
         ).count { it }
@@ -115,6 +131,16 @@ object Reliability {
     }
 
     fun openAppDetails(ctx: Context) = tryStart(ctx, appDetails(ctx))
+
+    /** The "TimeBlock completed" notification category's own settings page. */
+    fun openAlertChannelSettings(ctx: Context) = tryStart(
+        ctx,
+        Intent(SysSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(SysSettings.EXTRA_APP_PACKAGE, ctx.packageName)
+            .putExtra(SysSettings.EXTRA_CHANNEL_ID, com.pantelmg.tb2cal.service.Notifications.CH_ALERT),
+        Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, ctx.packageName),
+        appDetails(ctx),
+    )
 
     fun openAutostart(ctx: Context): Boolean {
         val candidates = listOf(

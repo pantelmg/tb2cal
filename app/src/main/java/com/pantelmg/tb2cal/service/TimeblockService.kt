@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.pantelmg.tb2cal.data.Repo
@@ -29,6 +31,7 @@ class TimeblockService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var collector: Job? = null
     private var dueJob: Job? = null
+    private var tickJob: Job? = null
     private var lastStartId = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -63,6 +66,8 @@ class TimeblockService : Service() {
     private fun render(s: Session) {
         dueJob?.cancel()
         dueJob = null
+        tickJob?.cancel()
+        tickJob = null
         if (!s.active) {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelfResult(lastStartId)
@@ -70,6 +75,20 @@ class TimeblockService : Service() {
         }
         getSystemService(NotificationManager::class.java)
             .notify(Notifications.ONGOING_ID, Notifications.ongoing(this, s))
+        if (s.status == Status.RUNNING) {
+            // Redraw the time right when each second changes (+ a few ms); Skipped while the screen is off.
+            tickJob = scope.launch {
+                val nm = getSystemService(NotificationManager::class.java)
+                val power = getSystemService(PowerManager::class.java)
+                while (true) {
+                    val now = SystemClock.elapsedRealtime()
+                    val toNext = if (s.mode == Mode.TIMER) s.remainingMs(now) % 1000 else 1000 - s.elapsedMs(now) % 1000
+                    delay((if (toNext == 0L) 1000L else toNext) + 8)
+                    if (s.mode == Mode.TIMER && s.remainingMs() <= 0) break
+                    if (power?.isInteractive != false) nm.notify(Notifications.ONGOING_ID, Notifications.ongoing(this@TimeblockService, s))
+                }
+            }
+        }
         if (s.status == Status.RUNNING && s.mode == Mode.TIMER) {
             // Backup to the AlarmManager alarm while the process is awake.
             dueJob = scope.launch {

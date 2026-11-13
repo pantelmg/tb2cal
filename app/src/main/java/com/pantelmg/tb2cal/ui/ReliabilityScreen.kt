@@ -135,6 +135,29 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                     onAction = { Reliability.openExactAlarmSettings(ctx) },
                 )
             }
+            if (!Reliability.unusedExempt(ctx)) {
+                CheckCard(
+                    title = "Pause app activity if unused / Remove permissions if app is unused: Off",
+                    body = "Android takes permissions (notifications, calendar, alarms) away from apps that aren't " +
+                        "opened for a few months. Turn it off for TB2Cal, so it keeps working when you only use the " +
+                        "widgets.",
+                    done = false,
+                    actionLabel = "Open",
+                    onAction = { Reliability.openUnusedAppSettings(ctx) },
+                )
+            }
+            if (Reliability.isXiaomi) {
+                CheckCard(
+                    title = "Pop-up and lock screen notifications",
+                    body = "Notifications → TimeBlock completed → turn on Floating notifications and Lock screen " +
+                        "notifications. MIUI/HyperOS turns them off by default, so the completion alert would only " +
+                        "sound, without popping up or showing on the lock screen.",
+                    done = settings.ackFloating,
+                    actionLabel = "Open",
+                    onAction = { Reliability.openAlertChannelSettings(ctx) },
+                    manual = { v -> Repo.updateSettings { it.copy(ackFloating = v) } },
+                )
+            }
             if (Reliability.hasAutostartManager) {
                 CheckCard(
                     title = "Autostart",

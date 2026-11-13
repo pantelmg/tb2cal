@@ -138,6 +138,8 @@ object Engine {
         if (s.status != Status.RUNNING || s.mode != Mode.TIMER) return false
         if (s.remainingMs() > DUE_TOLERANCE_MS) return false
         val c = complete(ctx) ?: return false
+        // The completion screen opens with the app (or by itself, from the alert) until DONE.
+        Repo.updateSettings { it.copy(completionToShow = c.id) }
         AlertService.start(ctx, c.label, id = c.id)
         return true
     }

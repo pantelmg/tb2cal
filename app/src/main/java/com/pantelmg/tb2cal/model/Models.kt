@@ -196,6 +196,10 @@ data class Settings(
     // Background-reliability steps the app can't detect itself (user confirms them).
     val ackAutostart: Boolean = false,
     val ackBatterySaver: Boolean = false,
+    /** Xiaomi: "TimeBlock completed" notifications allowed to pop up (floating) and show on the lock screen. */
+    val ackFloating: Boolean = false,
+    /** A timer ended: Its completion screen shows whenever the app is opened, until DONE (TimeBlock id; "" = none). */
+    val completionToShow: String = "",
     val ackRecentsLock: Boolean = false,
     val hideReliabilityCard: Boolean = false,
     val ackCalendarSync: Boolean = false,
@@ -241,6 +245,7 @@ data class Settings(
         .put("h", timerH).put("m", timerM).put("lastBlock", lastBlockId ?: "")
         .put("lastMode", lastMode.name).put("chv", channelVersion)
         .put("ackAuto", ackAutostart).put("ackSaver", ackBatterySaver).put("ackLock", ackRecentsLock)
+        .put("showCompletion", completionToShow).put("ackFloating", ackFloating)
         .put("hideRel", hideReliabilityCard)
         .put("ackCalSync", ackCalendarSync)
         .put("ackCalAuto", ackCalendarAutostart).put("ackCalData", ackCalendarData).put("permAsked", permissionsAsked).put("autoReg", autoRegister)
@@ -272,6 +277,8 @@ data class Settings(
             channelVersion = o.optInt("chv", 0),
             ackAutostart = o.optBoolean("ackAuto"),
             ackBatterySaver = o.optBoolean("ackSaver"),
+            completionToShow = o.optString("showCompletion"),
+            ackFloating = o.optBoolean("ackFloating"),
             ackRecentsLock = o.optBoolean("ackLock"),
             hideReliabilityCard = o.optBoolean("hideRel"),
             ackCalendarSync = o.optBoolean("ackCalSync"),

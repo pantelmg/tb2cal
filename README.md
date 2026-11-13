@@ -19,7 +19,11 @@ events from your Google account, export TimeBlock statistics for a given time pe
   Stopwatch mode).
 - **Timer end alert:** Your own sound (or the default one), at the notification or the media volume, with vibration
   Off, Short, Long or Pulse until stopped. **Test alert** in Settings; It stops from its notification or when you leave
-  Settings.
+  Settings. While the sound plays, other apps' music and videos pause, and they resume after it.
+- **Completion screen:** After a timer ends, it shows when you tap its notification, or first thing whenever you open
+  the app (icon, widget, a calendar day… which then opens after it), until you tap DONE, which also stops the alert.
+  Stopwatch: It shows right after Complete (app, notification or widget).
+- **Live time** in the app and the notification, updated exactly when each second changes.
 - **Secondary color** (Settings → Appearance): The phone's colors (default), or Purple, Blue, Teal, Green, Yellow,
   Orange, Red or Pink for buttons, switches and highlights.
 - **Automatic registration:** Every completed TimeBlock (for example `1h20m study`) is saved the moment it finishes,
@@ -78,8 +82,9 @@ long.
 - Foreground service with a permanent notification; An exact alarm-clock alarm for the timer end; A heartbeat alarm
   every 10 minutes; Restart after reboot, app update or being swiped away. Nothing is lost if the app is killed.
 - **Settings → Background reliability** walks you through the phone settings: Notifications, calendar access,
-  battery optimization, background restriction, exact alarms, Autostart and (Xiaomi) Battery saver. With Gmail events
-  on, also Auto-sync and Calendar sync.
+  battery optimization, background restriction, exact alarms, pause app activity if unused / remove permissions if
+  app is unused, Autostart and (Xiaomi) pop-up and lock screen notifications and Battery saver. With Gmail events on,
+  also Auto-sync and Calendar sync.
 
 ## Privacy
 TB2Cal has no internet access. Your TimeBlocks, statistics and settings stay on the phone. Gmail events are only read

@@ -30,7 +30,7 @@ object Notifications {
     /** Older low-importance channel. Importance can't be raised after creation, so it's replaced. */
     private const val OLD_ONGOING = "tb_ongoing"
     /** Silent, high-importance channel. AlertService plays the sound and vibration itself. */
-    private const val CH_ALERT = "tb_alert"
+    const val CH_ALERT = "tb_alert"
     /** Channels from older versions that carried their own sound. */
     private const val OLD_COMPLETE_PREFIX = "tb_complete_"
     private const val DEFAULT_COLOR = 0xFF1565C0.toInt()
@@ -105,7 +105,8 @@ object Notifications {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(openApp(ctx, null, 0))
+            // Tapping it opens the TimeBlocks tab (the running timer), whatever screen was open last.
+            .setContentIntent(openApp(ctx, MainActivity.ACTION_OPEN_MAIN, 0))
         if (!s.active) return b.setContentTitle("TB2Cal").build()
 
         // Colorized foreground-service notifications are ranked above all others (like calls and media).
@@ -121,13 +122,14 @@ object Notifications {
         val nowWall = System.currentTimeMillis()
 
         if (s.status == Status.RUNNING) {
+            // The time is written by TimeblockService exactly when each second changes (like the app's clock),
+            // instead of Android's own chronometer, which drifts and sometimes skips a second.
+            b.setShowWhen(false)
             if (s.mode == Mode.TIMER) {
                 val endsAt = nowWall + s.remainingMs()
-                b.setUsesChronometer(true).setChronometerCountDown(true).setWhen(endsAt).setShowWhen(true)
-                b.setContentText("Counting down · Ends at ${tf.format(Date(endsAt))}")
+                b.setContentText("${Fmt.clock(s.remainingMs(), roundUp = true)} left · Ends at ${tf.format(Date(endsAt))}")
             } else {
-                b.setUsesChronometer(true).setWhen(nowWall - s.elapsedMs()).setShowWhen(true)
-                b.setContentText("Counting up · Started at ${tf.format(Date(s.startWallMs))}")
+                b.setContentText("${Fmt.clock(s.elapsedMs())} · Started at ${tf.format(Date(s.startWallMs))}")
             }
             b.addAction(0, "Pause", TimeblockService.actionIntent(ctx, TimeblockService.ACTION_PAUSE))
         } else {

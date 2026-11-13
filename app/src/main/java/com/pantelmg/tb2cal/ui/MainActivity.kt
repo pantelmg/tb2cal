@@ -32,9 +32,11 @@ import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.engine.Engine
 import com.pantelmg.tb2cal.reliability.Reliability
 import com.pantelmg.tb2cal.service.AlertService
+import com.pantelmg.tb2cal.service.Notifications
 import com.pantelmg.tb2cal.service.TimeblockService
 import com.pantelmg.tb2cal.widget.MonthWidget
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.runtime.remember
 import java.time.LocalDate
 import android.Manifest
 import android.os.Build
@@ -51,6 +53,8 @@ class MainActivity : ComponentActivity() {
     private val navRequest = MutableStateFlow<Screen?>(null)
     /** Opened from the widget: Finishing the completion screen goes back to the home screen. */
     private var returnHome = false
+    /** Where to go after a waiting timer's completion screen (e.g. the calendar day that was tapped). */
+    private var afterCompletion: Screen? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,12 +71,40 @@ class MainActivity : ComponentActivity() {
         outState.putBoolean(KEY_RETURN_HOME, returnHome)
     }
 
-    /** Returns true if the activity closed (back to home screen), false to show the app's main screen. */
-    private fun completionFinished(): Boolean {
-        if (!returnHome) return false
+    /**
+     * DONE (or Back) on the completion screen: Stops the alert and clears the waiting-completion flag.
+     * Returns the screen to show next, or null if the activity closed (back to the home screen).
+     */
+    private fun completionFinished(): Screen? {
+        AlertService.stop(this, keepNotification = false)
+        // Also when the alert was already stopped from the notification: Its "TimeBlock completed!" goes away.
+        runCatching { getSystemService(android.app.NotificationManager::class.java)?.cancel(Notifications.COMPLETE_ID) }
+        if (Repo.settings.value.completionToShow.isNotEmpty()) Repo.updateSettings { it.copy(completionToShow = "") }
+        val next = afterCompletion ?: Screen.MAIN
+        afterCompletion = null
+        if (!returnHome) return next
         returnHome = false
         finish()
-        return true
+        return null
+    }
+
+    /** A timer ended and its completion screen hasn't been closed with DONE yet. */
+    private fun completionWaiting(): Boolean {
+        val id = Repo.settings.value.completionToShow
+        if (id.isEmpty()) return false
+        if (Repo.pending.value.any { it.id == id }) return true
+        Repo.updateSettings { it.copy(completionToShow = "") } // Already gone (e.g. deleted)
+        return false
+    }
+
+    /** Opens [dest], or first the waiting completion screen and [dest] after DONE. */
+    private fun go(dest: Screen) {
+        if (dest != Screen.COMPLETION && completionWaiting()) {
+            afterCompletion = dest
+            navRequest.value = Screen.COMPLETION
+        } else {
+            navRequest.value = dest
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -82,7 +114,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        AlertService.stop(this, keepNotification = false) // Opening the app silences the alert
+        // Opening the app (icon, widget, notification…) shows a waiting timer's completion screen first; There DONE
+        // stops the alert. Otherwise, opening the app silences the alert.
+        if (completionWaiting()) {
+            val requested = navRequest.value
+            if (requested != Screen.COMPLETION) {
+                if (requested != null) afterCompletion = requested
+                navRequest.value = Screen.COMPLETION
+            }
+        } else {
+            AlertService.stop(this, keepNotification = false)
+        }
         Engine.checkTimerDue(this)
         TimeblockService.ensureRunning(this) // revive if the OS killed it while we were away
         Reliability.resumeTick.value++
@@ -95,13 +137,14 @@ class MainActivity : ComponentActivity() {
         }
         when (i?.action) {
             ACTION_OPEN_COMPLETION -> navRequest.value = Screen.COMPLETION
+            ACTION_OPEN_MAIN -> go(Screen.MAIN)
             ACTION_OPEN_CALENDAR_DAY -> {
                 CalendarNav.day.value = i?.getLongExtra(EXTRA_EPOCH_DAY, LocalDate.now().toEpochDay()) ?: LocalDate.now().toEpochDay()
-                navRequest.value = Screen.CALENDAR
+                go(Screen.CALENDAR)
             }
             ACTION_OPEN_STATS_DAY -> {
                 StatsNav.day.value = i?.getLongExtra(EXTRA_EPOCH_DAY, LocalDate.now().toEpochDay()) ?: LocalDate.now().toEpochDay()
-                navRequest.value = Screen.STATS
+                go(Screen.STATS)
             }
             ACTION_COMPLETE_NOW -> {
                 Engine.complete(this)
@@ -114,6 +157,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val ACTION_OPEN_COMPLETION = "com.pantelmg.tb2cal.action.OPEN_COMPLETION"
+        const val ACTION_OPEN_MAIN = "com.pantelmg.tb2cal.action.OPEN_MAIN"
         const val ACTION_COMPLETE_NOW = "com.pantelmg.tb2cal.action.COMPLETE_NOW"
         const val EXTRA_FROM_WIDGET = "from_widget"
         const val ACTION_OPEN_STATS_DAY = "com.pantelmg.tb2cal.action.OPEN_STATS_DAY"
@@ -124,7 +168,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: () -> Boolean) {
+private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: () -> Screen?) {
     var screen by rememberSaveable { mutableStateOf(Screen.MAIN) }
     val request by navRequest.collectAsState()
     LaunchedEffect(request) {
@@ -134,7 +178,8 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
         }
     }
     BackHandler(enabled = screen != Screen.MAIN) {
-        if (screen != Screen.COMPLETION || !completionFinished()) screen = Screen.MAIN
+        if (screen != Screen.COMPLETION) screen = Screen.MAIN
+        else completionFinished()?.let { screen = it }
     }
     FirstRunPermissions()
 
@@ -189,7 +234,7 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
                 onBack = { screen = Screen.MAIN },
                 onOpenReliability = { screen = Screen.RELIABILITY },
             )
-            Screen.COMPLETION -> CompletionScreen(onDone = { if (!completionFinished()) screen = Screen.MAIN })
+            Screen.COMPLETION -> CompletionScreen(onDone = { completionFinished()?.let { screen = it } })
             Screen.RELIABILITY -> ReliabilityScreen(onBack = { screen = Screen.MAIN })
         }
     }
