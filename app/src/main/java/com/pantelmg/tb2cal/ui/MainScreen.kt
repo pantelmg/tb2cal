@@ -147,7 +147,10 @@ fun MainScreen(
                 Engine.checkTimerDue(ctx)
                 break
             }
-            delay(250)
+            // Wake right when the shown second changes (+ a few ms), so every second is shown, on time.
+            // (A fixed 250ms tick drifts against the seconds and can show one late or jump over it.)
+            val toNext = if (s.mode == Mode.TIMER) s.remainingMs(now) % 1000 else 1000 - s.elapsedMs(now) % 1000
+            delay((if (toNext == 0L) 1000L else toNext) + 8)
         }
     }
 
