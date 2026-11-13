@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -40,6 +42,7 @@ class AlertService : Service() {
     private var blockId: String? = null
     private var soundDone = true
     private var vibeDone = true
+    private var focus: AudioFocusRequest? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -82,9 +85,12 @@ class AlertService : Service() {
             else -> Uri.parse(u)
         }
         val default = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        // Other apps' music and videos (YouTube, Spotify…) pause while the sound plays, and resume after it.
+        if (uri != null) pauseOthers(s)
         // If the chosen sound can't be played any more, use the default sound instead of silence.
         player = uri?.let { u -> createPlayer(u, s) ?: if (u != default) createPlayer(default, s) else null }
         soundDone = player == null
+        if (soundDone) resumeOthers()
 
         // Vibration: Once, or repeating until stopped.
         vibeDone = true
@@ -108,24 +114,42 @@ class AlertService : Service() {
         maybeFinish()
     }
 
+    private fun attributes(s: Settings): AudioAttributes = AudioAttributes.Builder()
+        .setUsage(if (s.useMediaVolume) AudioAttributes.USAGE_MEDIA else AudioAttributes.USAGE_NOTIFICATION_EVENT)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+
+    /** Asks other apps to pause their sound for a short while (audio focus, "transient"). */
+    private fun pauseOthers(s: Settings) {
+        resumeOthers()
+        val am = getSystemService(AudioManager::class.java) ?: return
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(attributes(s))
+            .setOnAudioFocusChangeListener { }
+            .build()
+        runCatching { am.requestAudioFocus(req) }
+        focus = req
+    }
+
+    /** Lets the paused apps continue. */
+    private fun resumeOthers() {
+        val req = focus ?: return
+        focus = null
+        runCatching { getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(req) }
+    }
+
     private fun createPlayer(u: Uri, s: Settings): MediaPlayer? = runCatching {
         MediaPlayer().apply {
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(
-                        if (s.useMediaVolume) AudioAttributes.USAGE_MEDIA
-                        else AudioAttributes.USAGE_NOTIFICATION_EVENT
-                    )
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
+            setAudioAttributes(attributes(s))
             setDataSource(this@AlertService, u)
             setOnCompletionListener {
                 soundDone = true
+                resumeOthers()
                 maybeFinish()
             }
             setOnErrorListener { _, _, _ ->
                 soundDone = true
+                resumeOthers()
                 maybeFinish()
                 true
             }
@@ -157,6 +181,7 @@ class AlertService : Service() {
     private fun stopOutputs() {
         player?.let { runCatching { it.stop() }; it.release() }
         player = null
+        resumeOthers()
         vibrator?.cancel()
         vibrator = null
     }
