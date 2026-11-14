@@ -206,10 +206,10 @@ class PlanWidgetService : RemoteViewsService() {
             val keepDone = st.planWidgetDone != "HIDE"
             val out = mutableListOf<Row>()
             if (st.planWidgetList != "EVENTS") {
-                // Open tasks without a date first (on Today), then the day's dated/repeating ones (by time), then
-                // the tasks without a date ticked that day.
+                // Open tasks without a date first (from the day each was added onward), then the day's dated/repeating
+                // ones (by time), then the tasks without a date ticked that day.
                 val color = Plans.color(ItemKind.TASK)
-                if (day == Plan.today()) Plan.openUndated(items).forEach { out += Row(it.title, null, color, it.id, null, false) }
+                Plan.openUndatedOn(items, day).forEach { out += Row(it.title, "No date", color, it.id, null, false) }
                 items.filter { it.kind == ItemKind.TASK && !it.undated }
                     .flatMap { item -> Plan.occurrences(item, day, day + 1).map { item to it } }
                     .filter { (item, d) -> keepDone || d !in item.doneDays }

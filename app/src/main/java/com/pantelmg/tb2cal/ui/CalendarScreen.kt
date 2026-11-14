@@ -361,8 +361,8 @@ fun CalendarScreen() {
             }
         }
         // Only this list scrolls (and only if it doesn't fit).
-        // Today's list starts with the open tasks that have no date.
-        val undatedOpen = if (selected == today.toEpochDay()) Plan.openUndated(planItems) else emptyList()
+        // The list starts with the open tasks that have no date: From the day each was added onward.
+        val undatedOpen = remember(planItems, selected) { Plan.openUndatedOn(planItems, selected) }
         LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth()) {
             items(undatedOpen, key = { "u" + it.id }) { t ->
                 PlanRow(t, null, done = false, color = Plans.color(ItemKind.TASK), ui = planUi)
@@ -383,8 +383,11 @@ fun CalendarScreen() {
                     return@items
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).clip(CircleShape).background(Color(item.color)))
-                    Spacer(Modifier.width(10.dp))
+                    // Same 32dp slot as the Task/Event squares, so the colors and the names line up.
+                    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(12.dp).clip(CircleShape).background(Color(item.color)))
+                    }
+                    Spacer(Modifier.width(6.dp))
                     Column(Modifier.weight(1f)) {
                         Text(item.label, style = MaterialTheme.typography.bodyLarge)
                         Text(

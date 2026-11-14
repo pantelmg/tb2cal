@@ -45,8 +45,10 @@ preferences.
 A side feature next to TimeBlocks, added with **+Task/Event** (Calendar tab, left of TB Total) or the Task/Event
 manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a calendar).
 - **Task:** Its name, and **Repeat…** (like Google: Every N days/weeks/months/years, weekdays, an optional time,
-  start, and ends never / on a date / after N times). Without a repeat it's a one-time task with no date: It waits on
-  the widget (and at the top of today's list) until ticked, then shows, crossed out, on the day it was done.
+  start, and ends never / on a date / after N times; The end date starts as the start date, so On + that date means
+  only that day). Without a repeat it's a task with no date (like Google Tasks): It's listed, marked "No date", at the
+  top of the day lists (app and widget) from the day it was added onward until ticked or deleted, and isn't in the
+  calendars until then; Once ticked it shows, crossed out, on the day it was done.
   Repeating tasks show on their days, crossed out once ticked.
 - **Event:** Its name, date, all day or from–to times, and Repeat…. It counts as completed once its time is over.
   Events are also saved in TB2Cal's phone calendar.
@@ -138,7 +140,7 @@ In the widget picker: Calendar, TimeBlock manager, Task/Event manager.
   day arrows doesn't switch it) with its icon (white versions of the Add icons: A ticked square for Tasks, a calendar for Events; For
   Tasks/Events a closed square split corner to corner, a small tick above-left and a small calendar below-right),
   then **‹ Today ›** (always in the same place; ‹ › show other days as DD/MM, back to Today at midnight) and **+** (in
-  a rounded square). Below: Open tasks without a date (on Today) and the day's tasks, each with an outlined square to
+  a rounded square). Below: Open tasks without a date (from the day each was added) and the day's tasks, each with an outlined square to
   tick (or untick); The day's events, with a solid square.
   **Completed on the Task/Event widget** (Settings): Ticked tasks and past events stay **Crossed out** until the day
   ends (default), or are **Removed** from the list. The widget redraws by itself when an event ends and at midnight.

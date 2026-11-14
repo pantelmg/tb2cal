@@ -249,12 +249,17 @@ private fun ChoiceCard(icon: Painter, color: Color, title: String, sub: String, 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> Unit) {
-    var title by remember { mutableStateOf(initial?.title ?: "") }
+    // The cursor starts at the end of the name (editing).
+    var title by remember {
+        val t = initial?.title ?: ""
+        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)))
+    }
     var repeat by remember { mutableStateOf(initial?.repeat) }
     var time by remember { mutableStateOf(initial?.startMin) }
     var showRepeat by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier
                 .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
@@ -297,14 +302,14 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
                 )
                 Spacer(Modifier.weight(1f))
                 TextButton(
-                    enabled = title.isNotBlank(),
+                    enabled = title.text.isNotBlank(),
                     onClick = {
                         val keepDay = if (repeat == null) initial?.day else null
                         onSave(
                             PlanItem(
                                 id = initial?.id ?: Plans.newId(),
                                 kind = ItemKind.TASK,
-                                title = title.trim(),
+                                title = title.text.trim(),
                                 day = keepDay,
                                 allDay = time == null,
                                 startMin = if (repeat != null || keepDay != null) time else null,
@@ -320,7 +325,11 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
             }
         }
     }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // New or edited task: The keyboard opens once the sheet is fully up, so the sheet then rises with it in one smooth
+    // move (not sliding up, then covered, then pushed up).
+    LaunchedEffect(sheetState.currentValue) {
+        if (sheetState.currentValue == androidx.compose.material3.SheetValue.Expanded) runCatching { focus.requestFocus() }
+    }
     if (showRepeat) {
         RepeatDialog(
             initial = repeat, defaultStart = initial?.day ?: Plan.today(), showTime = true, time = time, showStart = true,
@@ -457,7 +466,9 @@ fun RepeatDialog(
     var t by remember { mutableStateOf(time) }
     var start by remember { mutableStateOf(initial?.startDay ?: defaultStart) }
     var endMode by remember { mutableStateOf(if (initial?.endDay != null) 1 else if (initial?.count != null) 2 else 0) }
-    var endDay by remember { mutableStateOf(initial?.endDay ?: (defaultStart + 91)) }
+    // "Ends on": The start date until picked (so On + that date = only that day), then the picked date.
+    var endDay by remember { mutableStateOf(initial?.endDay ?: (initial?.startDay ?: defaultStart)) }
+    var endPicked by remember { mutableStateOf(initial?.endDay != null) }
     var count by remember { mutableStateOf((initial?.count ?: 13).toString()) }
     var unitMenu by remember { mutableStateOf(false) }
     var pickStart by remember { mutableStateOf(false) }
@@ -596,8 +607,11 @@ fun RepeatDialog(
             }
         }
     }
-    if (pickStart) DayPickerDialog(start, onPick = { start = it }, onDismiss = { pickStart = false })
-    if (pickEnd) DayPickerDialog(endDay, onPick = { endDay = it }, onDismiss = { pickEnd = false })
+    if (pickStart) DayPickerDialog(start, onPick = {
+        start = it
+        if (!endPicked) endDay = it
+    }, onDismiss = { pickStart = false })
+    if (pickEnd) DayPickerDialog(endDay, onPick = { endDay = it; endPicked = true }, onDismiss = { pickEnd = false })
     if (pickTime) ClockPickerDialog(t ?: 9 * 60, onPick = { t = it }, onDismiss = { pickTime = false })
 }
 

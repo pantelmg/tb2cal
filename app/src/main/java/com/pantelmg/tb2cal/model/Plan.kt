@@ -263,6 +263,13 @@ object Plan {
         items.filter { it.undated && it.doneAt == null }.sortedBy { it.createdAt }
 
     /**
+     * Open undated tasks to list on [day]: The day each was added and every day after, until ticked or deleted
+     * (like Google Tasks). They stay "No date" and aren't in the calendars until done (then on the day done).
+     */
+    fun openUndatedOn(items: List<PlanItem>, day: Long): List<PlanItem> =
+        openUndated(items).filter { dayOf(it.createdAt) <= day }
+
+    /**
      * Next reminder time after [after] across timed tasks (not done that day) and timed events, or null. Reminders
      * come [beforeMin] minutes before the start (0: At the start). One whose time has already passed isn't given.
      */
