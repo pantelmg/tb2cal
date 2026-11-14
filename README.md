@@ -54,16 +54,18 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **Day list:** Tasks have an outlined square to tick (or untick), Events a solid square of the same size (also in
   Statistics and the widget); Tap an entry to edit it, the bin deletes it. For repeating
   ones both ask: This day only, or All repeats.
-- **Reminders:** A notification for timed tasks (with Done) and events: At their start (default), or 5, 10, 15 or 30
-  minutes before (Settings → Remind me before). A reminder whose time has already passed isn't given.
+- **Reminders:** A notification for timed tasks (with Done) and events: At their start (default), or some time before
+  (Settings → Remind me before). A reminder whose time has already passed isn't given.
 ### Calendar preferences (Settings)
 - **In-app Calendar: TimeBlocks/day:** 3 (default), 4 or 5. The widget's capacity grows with its size instead.
 - **Gmail account:** Which account's events are shown; The one with the most events is first and picked by default.
 - **Gmail import: Languages:** Calendars that publish the same events in several languages (like Google's holidays
   in Greek and in English) can be picked one by one, or none. Your other events are always shown.
-- **Gmail events on the Task/Event widget** (off by default): Today's Gmail events also in the widget's Events list.
+- **Gmail events on the Task/Event widget** (on by default): The day's Gmail events also in the widget's Events list
+  (with Import from your Gmail on).
 - **Completed on the Task/Event widget:** Crossed out (default) or Removed.
-- **Remind me before:** Start (default), 5m, 10m, 15m or 30m before timed tasks and events.
+- **Remind me before:** A scrollable bar (Start, the default, then 5m up to 24h) with **Enter** fixed on the right, for
+  any time up to 48h59m before timed tasks and events.
 - **Visible to other calendar apps** (on by default): Completed TimeBlocks and Events also show in the phone's other
   calendar apps; Off hides TB2Cal's phone calendar there (and the completion screen's Open in another calendar app).
 - **Task and Event colors:** One preset color for all tasks and one for all events; Changing it recolors past and
@@ -132,7 +134,8 @@ In the widget picker: Calendar, TimeBlock manager, Task/Event manager.
   TimeBlock (tap to cycle through your list), then Start, Pause and Stop, always in the same place. In Stopwatch mode
   ✓ (Complete), in a circle of the same size, appears left of Start. Buttons that can't be used do nothing.
 - **Task/Event manager (4×2 or larger, 4×3 to start):** **Tasks/Events ▾** (tap to switch to Tasks or Events;
-  remembered) with its icon (white versions of the Add icons: A ticked square for Tasks, a calendar for Events; For
+  remembered; Tasks/Events to start with; The tap area is the size of "Tasks/Events ▾", so the free space up to the
+  day arrows doesn't switch it) with its icon (white versions of the Add icons: A ticked square for Tasks, a calendar for Events; For
   Tasks/Events a closed square split corner to corner, a small tick above-left and a small calendar below-right),
   then **‹ Today ›** (always in the same place; ‹ › show other days as DD/MM, back to Today at midnight) and **+** (in
   a rounded square). Below: Open tasks without a date (on Today) and the day's tasks, each with an outlined square to

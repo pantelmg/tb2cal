@@ -607,7 +607,8 @@ private fun ColumnScope.PlanStats(rows: List<PlanOccurrence>, done: Int, which: 
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                            // Same colors as List/Graph: Unselected on the surface color (black in dark mode).
+                            .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
                             .clickable { Repo.updateSettings { it.copy(statsItems = key) } }
                             .padding(start = 10.dp, end = 14.dp, top = 5.dp, bottom = 5.dp),
                         verticalAlignment = Alignment.CenterVertically

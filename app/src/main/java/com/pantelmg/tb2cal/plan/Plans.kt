@@ -230,8 +230,8 @@ object Reminders {
 
     internal fun notificationId(id: String, day: Long) = id.hashCode() xor day.toInt()
 
-    /** "10 min", "1 h". */
-    fun reminderLead(min: Int) = if (min % 60 == 0) "${min / 60} h" else "$min min"
+    /** "10m", "1h", "1h30m" (like the app's durations). */
+    fun reminderLead(min: Int) = com.pantelmg.tb2cal.model.Fmt.duration(min * 60_000L)
 }
 
 /** Reminder alarm, and the reminder's "Done" button. */

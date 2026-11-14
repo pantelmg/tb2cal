@@ -210,7 +210,7 @@ fun AddChooserSheet(onTask: () -> Unit, onEvent: () -> Unit, onDismiss: () -> Un
             Spacer(Modifier.height(10.dp))
             ChoiceCard(
                 rememberVectorPainter(Icons.Default.DateRange), Color(Plans.color(ItemKind.EVENT)),
-                "Event", "On a date: All day or at a time, once or repeating.", onEvent
+                "Event", "On a date: All day or at a time, once or repeating. Auto-crossed on completion.", onEvent
             )
         }
     }

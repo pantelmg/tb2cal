@@ -17,11 +17,12 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <!-- Switch list (Tasks/Events · Tasks · Events): The tap area is the icon and the size of "Tasks/Events ▾"
+             (also when a shorter list name is shown), so the space up to the day arrows doesn't switch the list. -->
         <LinearLayout
             android:id="@+id/plan_header"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:layout_weight="1"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -33,17 +34,37 @@
                 android:contentDescription="@null"
                 android:src="@drawable/ic_w_list_both" />
 
-            <TextView
-                android:id="@+id/plan_title"
+            <FrameLayout
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="Tasks/Events ▾"
-                android:textColor="#FFFFFFFF"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:layout_height="wrap_content">
+
+                <!-- Sizes the tap area (never shown). -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="Tasks/Events ▾"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:visibility="invisible" />
+
+                <TextView
+                    android:id="@+id/plan_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="Tasks/Events ▾"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
         </LinearLayout>
+
+        <!-- Free space (not tappable) between the list name and the day arrows. -->
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
 
         <!-- Day: Fixed in place; Tap the day to go back to Today. -->
         <ImageButton
@@ -76,7 +97,7 @@
             android:scaleType="fitCenter"
             android:src="@drawable/ic_w_next" />
 
-        <!-- Same circle as the TimeBlock manager's Timer/Stopwatch button. -->
+        <!-- Rounded square, same size and line as the TimeBlock manager's Timer/Stopwatch circle. -->
         <ImageButton
             android:id="@+id/plan_add"
             android:layout_width="32dp"

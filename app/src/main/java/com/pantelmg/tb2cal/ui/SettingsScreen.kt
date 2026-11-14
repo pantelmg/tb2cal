@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -82,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
 import com.pantelmg.tb2cal.R
 import com.pantelmg.tb2cal.model.GoogleColors
+import com.pantelmg.tb2cal.model.Fmt
 import com.pantelmg.tb2cal.plan.Plans
 import com.pantelmg.tb2cal.plan.Reminders
 import com.pantelmg.tb2cal.calendar.CalendarWriter
@@ -162,6 +164,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             }
         }
     }
+    var enterRemind by remember { mutableStateOf(false) }
     // Export/Import preferences (.t2cp): Saving runs off the main thread; Importing asks first (it overwrites).
     var prefsToImport by remember { mutableStateOf<PrefsBundle?>(null) }
     val prefsSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
@@ -539,23 +542,39 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
                 subtitle = "Tasks and events with a time: " +
                     if (settings.remindBefore == 0) "At the start." else "${Reminders.reminderLead(settings.remindBefore)} before the start."
             )
-            SingleChoiceSegmentedButtonRow(
+            // Scrollable choices; Enter (any time, in hours and minutes) stays fixed on the right.
+            val remindChoices = listOf(0, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 1440)
+            val remindCustom = settings.remindBefore !in remindChoices
+            fun setRemind(min: Int) {
+                Repo.updateSettings { it.copy(remindBefore = min) }
+                Reminders.schedule(ctx)
+            }
+            Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp)
+                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val choices = listOf(0 to "Start", 5 to "5m", 10 to "10m", 15 to "15m", 30 to "30m")
-                choices.forEachIndexed { i, (min, label) ->
-                    SegmentedButton(
-                        selected = settings.remindBefore == min,
-                        onClick = {
-                            Repo.updateSettings { it.copy(remindBefore = min) }
-                            Reminders.schedule(ctx)
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(index = i, count = choices.size),
-                        icon = {}
-                    ) { Text(label, maxLines = 1) }
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    remindChoices.forEach { min ->
+                        ChoicePill(if (min == 0) "Start" else Fmt.duration(min * 60_000L), settings.remindBefore == min) { setRemind(min) }
+                    }
                 }
+                Spacer(Modifier.width(8.dp))
+                ChoicePill("Enter", remindCustom) { enterRemind = true }
+            }
+            if (enterRemind) {
+                RemindEnterDialog(
+                    settings.remindBefore,
+                    onSet = { setRemind(it) },
+                    onDismiss = { enterRemind = false }
+                )
             }
             RowDivider()
 
@@ -578,8 +597,8 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
         Card(Modifier.fillMaxWidth()) {
             Text(
                 "Only TB2Cal's own TimeBlocks, Tasks and Events. Events imported from your Gmail stay in your Google " +
-                    "account; They're never exported, imported or deleted here. (Your TimeBlock list, goals and " +
-                    "settings: Export/Import preferences, below.)",
+                    "account; They're never exported, imported or deleted here (your TimeBlock list, goals and " +
+                    "settings: Export/Import preferences, below).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
@@ -837,4 +856,86 @@ private fun ColorChoiceRow(label: String, current: String, onPick: (String) -> U
             }
         }
     }
+}
+
+/** A selectable pill (Remind me before): Filled when chosen. */
+@Composable
+private fun ChoicePill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        Modifier
+            .clip(shape)
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+            .border(1.dp, if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.outline, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+/** Remind me before → Enter: Any time before the start, in hours (up to 48) and minutes. */
+@Composable
+private fun RemindEnterDialog(current: Int, onSet: (Int) -> Unit, onDismiss: () -> Unit) {
+    var hours by remember { mutableStateOf(if (current > 0) (current / 60).toString() else "") }
+    var minutes by remember { mutableStateOf(if (current > 0) (current % 60).toString() else "") }
+    val h = hours.ifEmpty { "0" }.toIntOrNull()
+    val m = minutes.ifEmpty { "0" }.toIntOrNull()
+    val valid = h != null && m != null && h in 0..48 && m in 0..59
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remind me before") },
+        text = {
+            Column {
+                Text(
+                    "How long before the start of tasks and events with a time. 0h 0m: At the start.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = hours,
+                        onValueChange = { v -> hours = v.filter(Char::isDigit).take(2) },
+                        label = { Text("Hours") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = minutes,
+                        onValueChange = { v -> minutes = v.filter(Char::isDigit).take(2) },
+                        label = { Text("Minutes") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (!valid) {
+                    Text(
+                        "Up to 48 hours and 59 minutes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                onSet((h ?: 0) * 60 + (m ?: 0))
+                onDismiss()
+            }) { Text("Set") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }

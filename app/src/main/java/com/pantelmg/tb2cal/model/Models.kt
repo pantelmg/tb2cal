@@ -245,7 +245,7 @@ data class Settings(
     /** Task/Event manager widget: The day shown (epoch day) and the day it was picked on (back to Today at midnight). */
     val planWidgetDay: Long = -1,
     val planWidgetDaySetOn: Long = -1,
-    val widgetGmail: Boolean = false,
+    val widgetGmail: Boolean = true,
     /** Task/Event manager widget: The day's ticked tasks and past events stay crossed out ("CROSS") or go ("HIDE"). */
     val planWidgetDone: String = "CROSS",
     /** Task/Event reminders: Minutes before the start (0: At the start). */
@@ -275,7 +275,7 @@ data class Settings(
         .put("onwardOff", org.json.JSONArray().also { a -> onwardOff.forEach { a.put(it) } })
         .put("accent", accent)
         .put("taskColor", taskColor).put("eventColor", eventColor).put("othersSee", othersSeeCalendar)
-        .put("planList", planWidgetList).put("widgetGmail", widgetGmail)
+        .put("planList", planWidgetList).put("widgetGmailOn", widgetGmail)
         .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn).put("planDone", planWidgetDone).put("remindBefore", remindBefore)
         .put("statsMode", statsMode).put("statsItems", statsItems)
         .put("dayEntries", dayEntries).put("gmailAccount", gmailAccount).put("allowHide", allowHide)
@@ -325,7 +325,8 @@ data class Settings(
             planWidgetList = o.optString("planList").ifEmpty { "BOTH" },
             planWidgetDay = o.optLong("planDay", -1L),
             planWidgetDaySetOn = o.optLong("planDayOn", -1L),
-            widgetGmail = o.optBoolean("widgetGmail"),
+            // (New key: Its default changed to ON, also for those who had the earlier OFF default saved.)
+            widgetGmail = o.optBoolean("widgetGmailOn", true),
             planWidgetDone = o.optString("planDone").ifEmpty { "CROSS" },
             remindBefore = o.optInt("remindBefore", 0),
             statsMode = o.optString("statsMode").ifEmpty { "TB" },
