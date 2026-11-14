@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -129,6 +130,7 @@ fun PlanDialogs(ui: PlanUi, defaultDay: Long, onClosed: () -> Unit = {}) {
     when (ui.newKind) {
         ItemKind.TASK -> TaskSheet(
             initial = null,
+            defaultDay = defaultDay,
             onSave = { Plans.save(ctx, it); ui.newKind = null; close() },
             onDismiss = { ui.newKind = null; close() }
         )
@@ -248,7 +250,7 @@ private fun ChoiceCard(icon: Painter, color: Color, title: String, sub: String, 
 /** Google-style task sheet: The name, then Repeat… (the only option) and Save. Without a repeat: One-time, no date. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> Unit) {
+fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> Unit, defaultDay: Long? = null) {
     // The cursor starts at the end of the name (editing).
     var title by remember {
         val t = initial?.title ?: ""
@@ -256,7 +258,12 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
     }
     var repeat by remember { mutableStateOf(initial?.repeat) }
     var time by remember { mutableStateOf(initial?.startMin) }
+    // Date (one-time tasks): A new task starts on the day it's added from (Calendar tab's day, widget's day) when
+    // that isn't today; From today it starts with No date (listed every day until done, like Google Tasks).
+    var date by remember { mutableStateOf(initial?.day ?: defaultDay?.takeIf { initial == null && it != Plan.today() }) }
     var showRepeat by remember { mutableStateOf(false) }
+    var pickDate by remember { mutableStateOf(false) }
+    var pickTime by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -278,17 +285,42 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
                     .fillMaxWidth()
                     .focusRequester(focus)
             )
-            initial?.day?.let { d ->
-                if (repeat == null) {
-                    Text(
-                        "On ${Plan.shortDate(d)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp)
-                    )
-                }
-            }
+            // Date · Time (one-time tasks) · Repeat…, scrolling if needed; Save stays on the right.
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
+              Row(
+                Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                if (repeat == null) {
+                    val d = date
+                    AssistChip(
+                        onClick = { pickDate = true },
+                        label = { Text(if (d == null) "No date" else Plan.shortDate(d), maxLines = 1) },
+                        leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        trailingIcon = if (d == null) null else {
+                            {
+                                Icon(
+                                    Icons.Default.Close, contentDescription = "No date",
+                                    modifier = Modifier.size(18.dp).clickable { date = null; time = null }
+                                )
+                            }
+                        }
+                    )
+                    if (d != null) {
+                        val tm = time
+                        AssistChip(
+                            onClick = { pickTime = true },
+                            label = { Text(if (tm == null) "Set time" else Plan.clock(tm), maxLines = 1) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_s_clock), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            trailingIcon = if (tm == null) null else {
+                                { Icon(Icons.Default.Close, contentDescription = "No time", modifier = Modifier.size(18.dp).clickable { time = null }) }
+                            }
+                        )
+                    }
+                }
                 AssistChip(
                     onClick = { showRepeat = true },
                     label = {
@@ -297,14 +329,14 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
                             maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                     },
-                    leadingIcon = { Icon(painterResource(R.drawable.ic_s_clock), contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    modifier = Modifier.weight(1f, fill = false)
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_s_clock), contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
-                Spacer(Modifier.weight(1f))
+              }
+                Spacer(Modifier.width(8.dp))
                 TextButton(
                     enabled = title.text.isNotBlank(),
                     onClick = {
-                        val keepDay = if (repeat == null) initial?.day else null
+                        val keepDay = if (repeat == null) date else null
                         onSave(
                             PlanItem(
                                 id = initial?.id ?: Plans.newId(),
@@ -314,7 +346,11 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
                                 allDay = time == null,
                                 startMin = if (repeat != null || keepDay != null) time else null,
                                 repeat = repeat,
-                                doneDays = if (repeat != null || keepDay != null) initial?.doneDays.orEmpty() else emptySet(),
+                                doneDays = when {
+                                    repeat != null -> initial?.doneDays.orEmpty()
+                                    keepDay != null -> initial?.doneDays.orEmpty().filter { it == keepDay }.toSet()
+                                    else -> emptySet()
+                                },
                                 doneAt = if (repeat == null && keepDay == null) initial?.doneAt else null,
                                 skipped = if (repeat != null) initial?.skipped.orEmpty() else emptySet(),
                                 createdAt = initial?.createdAt ?: System.currentTimeMillis(),
@@ -332,11 +368,14 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
     }
     if (showRepeat) {
         RepeatDialog(
-            initial = repeat, defaultStart = initial?.day ?: Plan.today(), showTime = true, time = time, showStart = true,
-            onDone = { r, t -> repeat = r; time = if (r == null) null else t; showRepeat = false },
+            initial = repeat, defaultStart = date ?: Plan.today(), showTime = true, time = time, showStart = true,
+            // Don't repeat: Back to the date (and time) shown before.
+            onDone = { r, t -> repeat = r; if (r != null) time = t; showRepeat = false },
             onDismiss = { showRepeat = false }
         )
     }
+    if (pickDate) DayPickerDialog(date ?: Plan.today(), onPick = { date = it }, onDismiss = { pickDate = false })
+    if (pickTime) ClockPickerDialog(time ?: 9 * 60, onPick = { time = it }, onDismiss = { pickTime = false })
 }
 
 /** Full-screen event editor: Name, date, all day or start–end time, Repeat…. */

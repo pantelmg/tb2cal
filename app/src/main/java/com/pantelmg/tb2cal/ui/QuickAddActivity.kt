@@ -18,7 +18,8 @@ class QuickAddActivity : ComponentActivity() {
         setContent {
             TB2CalTheme {
                 val ui = remember { PlanUi().also { it.add() } }
-                PlanDialogs(ui, defaultDay = Plan.today(), onClosed = { finish() })
+                // The day the widget shows (‹ › can show other days): New tasks and events go there.
+                PlanDialogs(ui, defaultDay = com.pantelmg.tb2cal.widget.PlanWidget.shownDay(), onClosed = { finish() })
             }
         }
     }

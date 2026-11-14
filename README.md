@@ -44,13 +44,16 @@ preferences.
 ## Tasks and Events
 A side feature next to TimeBlocks, added with **+Task/Event** (Calendar tab, left of TB Total) or the Task/Event
 manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a calendar).
-- **Task:** Its name, and **Repeat…** (like Google: Every N days/weeks/months/years, weekdays, an optional time,
-  start, and ends never / on a date / after N times; The end date starts as the start date, so On + that date means
-  only that day; Any repeat that starts and ends on the same day shows as **Today only**, or e.g. **02/11/26 only**
-  once that day has passed). Without a repeat it's a task with no date (like Google Tasks): It's listed, marked "No date", at the
-  top of the day lists (app and widget) from the day it was added onward until ticked or deleted, and isn't in the
-  calendars until then; Once ticked it shows, crossed out, on the day it was done.
-  Repeating tasks show on their days, crossed out once ticked.
+- **Task:** Its name, a **date** (added from today: **No date**; From another day, in the Calendar tab or on the
+  widget: That day; Tap to change it, × for No date), a **time** once it has a date, and **Repeat…** (like Google:
+  Every N days/weeks/months/years, weekdays, an optional time, start, and ends never / on a date / after N times; The
+  end date starts as the start date, so On + that date means only that day; Any repeat that starts and ends on the
+  same day shows as **Today only**, or e.g. **02/11/26 only** once that day has passed).
+  - **No date** (like Google Tasks): Listed, marked "No date", at the top of the day lists (app and widget) from the
+    day it was added onward until ticked or deleted; Not in the calendars until then; Once ticked it shows, crossed
+    out, on the day it was done.
+  - **With a date:** On that day (calendars and lists), crossed out once ticked; With a time, it also gets a reminder.
+  - **Repeating:** On their days, crossed out once ticked.
 - **Event:** Its name, date, all day or from–to times, and Repeat…. It counts as completed once its time is over.
   Events are also saved in TB2Cal's phone calendar.
 - **In the calendars:** Outlined (transparent) entries, in one color for all tasks and one for all events (Settings).
