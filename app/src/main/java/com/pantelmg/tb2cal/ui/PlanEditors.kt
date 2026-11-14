@@ -110,9 +110,9 @@ class PlanUi {
 
     fun add() { chooser = true }
 
-    /** Tap on an item: Repeating ones ask This day only / All repeats first. */
+    /** Tap on an item: Repeating ones ask This day only / All repeats first (not one-day ones: Nothing to choose). */
     fun edit(item: PlanItem, day: Long?) {
-        if (item.repeats && day != null) askEdit = item to day else editing = item to null
+        if (item.repeatsOften && day != null) askEdit = item to day else editing = item to null
     }
 
     fun delete(item: PlanItem, day: Long?) { askDelete = item to day }
@@ -193,7 +193,7 @@ fun PlanDialogs(ui: PlanUi, defaultDay: Long, onClosed: () -> Unit = {}) {
         else EventEditor(initial, defaultDay, onSave = save, onDismiss = { ui.editing = null; close() })
     }
     ui.askDelete?.let { (item, day) ->
-        if (item.repeats && day != null) {
+        if (item.repeatsOften && day != null) {
             val keep = keepsPast(item)
             ScopeDialog(
                 title = "Delete ${item.title}?",

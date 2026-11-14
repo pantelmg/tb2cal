@@ -149,6 +149,9 @@ data class PlanItem(
     val undated: Boolean get() = kind == ItemKind.TASK && repeat == null && day == null
     val repeats: Boolean get() = repeat != null
 
+    /** A repeat that can happen on more than one day (a one-day one, "Today only", is like a single item). */
+    val repeatsOften: Boolean get() = repeat?.let { it.onlyDay() == null } == true
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("k", kind.name).put("t", title).put("d", day ?: -1L).put("ad", allDay)
         .put("sm", startMin ?: -1).put("em", endMin ?: -1)
