@@ -257,7 +257,7 @@ fun MainScreen(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Create TimeBlocks, with your own conditions, to track and improve productivity. " +
+            "Create TimeBlocks (and Tasks/Events), with your own conditions, to track and improve productivity. " +
                 "Completed TimeBlocks are registered in the app and the local Calendar.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant

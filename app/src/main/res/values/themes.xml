@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.TB2Cal" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Quick add from the widget: Only the sheet shows, over the home screen. -->
+    <style name="Theme.TB2Cal.Translucent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
     <color name="ic_launcher_bg">#1565C0</color>
 </resources>

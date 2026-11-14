@@ -6,9 +6,11 @@ import com.pantelmg.tb2cal.model.BlockType
 import com.pantelmg.tb2cal.model.CompletedBlock
 import com.pantelmg.tb2cal.model.Goal
 import com.pantelmg.tb2cal.model.HistoryEntry
+import com.pantelmg.tb2cal.model.PlanItem
 import com.pantelmg.tb2cal.model.Session
 import com.pantelmg.tb2cal.model.Settings
 import com.pantelmg.tb2cal.widget.MonthWidget
+import com.pantelmg.tb2cal.widget.PlanWidget
 import com.pantelmg.tb2cal.widget.TB2CalWidget
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONArray
@@ -26,6 +28,8 @@ object Repo {
     val pending = MutableStateFlow<List<CompletedBlock>>(emptyList())
     val history = MutableStateFlow<List<HistoryEntry>>(emptyList())
     val goals = MutableStateFlow<List<Goal>>(emptyList())
+    /** Tasks and Events. */
+    val items = MutableStateFlow<List<PlanItem>>(emptyList())
 
     fun init(ctx: Context) {
         synchronized(lock) {
@@ -44,6 +48,7 @@ object Repo {
                 .filterNot { it.registered && it.endWallMs < dayAgo }
             history.value = readList("history") { HistoryEntry.fromJson(it) } ?: emptyList()
             goals.value = readList("goals") { Goal.fromJson(it) } ?: emptyList()
+            items.value = readList("items") { PlanItem.fromJson(it) } ?: emptyList()
         }
     }
 
@@ -63,6 +68,38 @@ object Repo {
             goals.value = list
             writeList("goals", list) { it.toJson() }
         }
+    }
+
+    // ---- Tasks and Events (Plans does the calendar sync, reminders and widgets around these) ----
+    fun putItem(item: PlanItem) {
+        synchronized(lock) {
+            val list = if (items.value.any { it.id == item.id }) items.value.map { if (it.id == item.id) item else it }
+            else items.value + item
+            items.value = list
+            writeList("items", list) { it.toJson() }
+        }
+        changed()
+    }
+
+    /** Changes one item based on its latest saved state. Returns the new item (null if it's gone). */
+    fun updateItem(id: String, f: (PlanItem) -> PlanItem): PlanItem? {
+        var out: PlanItem? = null
+        synchronized(lock) {
+            val list = items.value.map { if (it.id == id) f(it).also { n -> out = n } else it }
+            items.value = list
+            writeList("items", list) { it.toJson() }
+        }
+        changed()
+        return out
+    }
+
+    fun removeItem(id: String) {
+        synchronized(lock) {
+            val list = items.value.filterNot { it.id == id }
+            items.value = list
+            writeList("items", list) { it.toJson() }
+        }
+        changed()
     }
 
     // ---- Settings ----
@@ -152,6 +189,27 @@ object Repo {
         changed()
     }
 
+    /** Data management: Adds imported TimeBlocks (one write). */
+    fun addHistoryAll(list: List<HistoryEntry>) {
+        synchronized(lock) {
+            val all = (history.value + list).sortedBy { it.startWallMs }
+            history.value = all
+            writeList("history", all) { it.toJson() }
+        }
+        changed()
+    }
+
+    /** Data management: Deletes these TimeBlocks from the records (one write). */
+    fun removeHistoryEntries(list: List<HistoryEntry>) {
+        val keys = list.map { it.name to it.startWallMs }.toSet()
+        synchronized(lock) {
+            val all = history.value.filterNot { (it.name to it.startWallMs) in keys }
+            history.value = all
+            writeList("history", all) { it.toJson() }
+        }
+        changed()
+    }
+
     /** Deletes one completed TimeBlock from the records (Calendar tab bin). */
     fun removeHistoryEntry(name: String, startWallMs: Long) {
         synchronized(lock) {
@@ -175,6 +233,7 @@ object Repo {
         if (::appCtx.isInitialized) {
             runCatching { TB2CalWidget.refresh(appCtx) }
             runCatching { MonthWidget.refresh(appCtx) }
+            runCatching { PlanWidget.refresh(appCtx) }
         }
     }
 

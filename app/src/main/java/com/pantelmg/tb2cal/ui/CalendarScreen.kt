@@ -7,6 +7,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import com.pantelmg.tb2cal.plan.Plans
+import com.pantelmg.tb2cal.model.PlanItem
+import com.pantelmg.tb2cal.model.Plan
+import com.pantelmg.tb2cal.model.ItemKind
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.text.style.TextDecoration
 import com.pantelmg.tb2cal.R
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -94,7 +102,10 @@ fun CalendarScreen() {
     val scope = rememberCoroutineScope()
     val settings by Repo.settings.collectAsState()
     val history by Repo.history.collectAsState()
+    val planItems by Repo.items.collectAsState()
     val tick by Reliability.resumeTick.collectAsState()
+    // Adding, editing and deleting Tasks/Events (sheets and dialogs).
+    val planUi = remember { PlanUi() }
     val locale = Locale.getDefault()
     val today = LocalDate.now()
 
@@ -119,8 +130,8 @@ fun CalendarScreen() {
 
     var byDay by remember { mutableStateOf<Map<LocalDate, List<DayItem>>>(emptyMap()) }
     LaunchedEffect(
-        gridStart, history, settings.gmailView, settings.gmailAccount, settings.holidayOff,
-        settings.allowHide, settings.hiddenEvents, settings.hiddenInstances, tick
+        gridStart, history, planItems, settings.taskColor, settings.eventColor, settings.gmailView,
+        settings.gmailAccount, settings.holidayOff, settings.allowHide, settings.hiddenEvents, settings.hiddenInstances, tick
     ) {
         byDay = withContext(Dispatchers.IO) {
             runCatching { CalendarData.byDay(ctx, gridStart, gridEnd) }.getOrDefault(emptyMap())
@@ -145,11 +156,11 @@ fun CalendarScreen() {
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        // ---- Title + Sync with your Gmail ----
+        // ---- Title + Import from your Gmail ----
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Calendar", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End) {
-                Text("Sync with your Gmail", style = MaterialTheme.typography.labelLarge)
+                Text("Import from your Gmail", style = MaterialTheme.typography.labelLarge)
                 Text(
                     if (settings.gmailView) "Shown here, read-only" else "OFF",
                     style = MaterialTheme.typography.labelSmall,
@@ -272,19 +283,26 @@ fun CalendarScreen() {
                                 }
                             }
                             items.take(perDay).forEach { item ->
+                                val c = Color(item.color).copy(alpha = if (inMonth) 1f else 0.5f)
+                                val outlined = item.plan != null
                                 Text(
                                     item.label,
                                     fontSize = chipFont,
                                     lineHeight = chipLine,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = Color(GoogleColors.textOn(item.color)),
+                                    color = if (outlined) c else Color(GoogleColors.textOn(item.color)),
+                                    textDecoration = if (item.done) TextDecoration.LineThrough else null,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 1.dp)
                                         .height(chipH - 1.dp)
                                         .clip(RoundedCornerShape(3.dp))
-                                        .background(Color(item.color).copy(alpha = if (inMonth) 1f else 0.5f))
+                                        .then(
+                                            // Tasks and Events: Transparent with an outline in their color.
+                                            if (outlined) Modifier.border(1.dp, c, RoundedCornerShape(3.dp))
+                                            else Modifier.background(c)
+                                        )
                                         .padding(horizontal = 2.dp)
                                 )
                             }
@@ -310,18 +328,32 @@ fun CalendarScreen() {
                 day.format(DateTimeFormatter.ofPattern("EEE dd/MM/yy", Locale.ENGLISH)),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier.weight(1f)
             )
+            val boxShape = RoundedCornerShape(10.dp)
+            // +Task/Event: Same style as TB Total, fixed size, just left of it.
+            Box(
+                Modifier
+                    .clip(boxShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
+                    .clickable { planUi.add() }
+                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("+Task/Event", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+            Spacer(Modifier.width(8.dp))
             // TB Total ON/OFF: Same size either way (sized for the longer "OFF" text); Only the colors change.
             val on = settings.tbTotal
-            val boxShape = RoundedCornerShape(10.dp)
             val tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             Box(
                 Modifier
                     .clip(boxShape)
                     .border(1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, boxShape)
                     .clickable { Repo.updateSettings { it.copy(tbTotal = !it.tbTotal) } }
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                    .padding(horizontal = 8.dp, vertical = 7.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text("TB Total OFF", style = MaterialTheme.typography.titleSmall, modifier = Modifier.alpha(0f))
@@ -329,8 +361,13 @@ fun CalendarScreen() {
             }
         }
         // Only this list scrolls (and only if it doesn't fit).
+        // Today's list starts with the open tasks that have no date.
+        val undatedOpen = if (selected == today.toEpochDay()) Plan.openUndated(planItems) else emptyList()
         LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth()) {
-            if (dayItems.isEmpty()) {
+            items(undatedOpen, key = { "u" + it.id }) { t ->
+                PlanRow(t, null, done = false, color = Plans.color(ItemKind.TASK), ui = planUi)
+            }
+            if (dayItems.isEmpty() && undatedOpen.isEmpty()) {
                 item {
                     Text(
                         if (day.isBefore(gridStart) || !day.isBefore(gridEnd)) "Go to this day's month to see it."
@@ -340,6 +377,11 @@ fun CalendarScreen() {
                 }
             }
             items(dayItems) { item ->
+                val plan = item.plan
+                if (plan != null) {
+                    PlanRow(plan, item.planDay, item.done, item.color, planUi)
+                    return@items
+                }
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(12.dp).clip(CircleShape).background(Color(item.color)))
                     Spacer(Modifier.width(10.dp))
@@ -370,6 +412,8 @@ fun CalendarScreen() {
         }
     }
 
+    PlanDialogs(planUi, defaultDay = selected)
+
     toHide?.let { item ->
         AlertDialog(
             onDismissRequest = { toHide = null },
@@ -377,7 +421,7 @@ fun CalendarScreen() {
             text = {
                 Text(
                     "It's hidden here and on the Calendar widget. Your Google account isn't changed. Hidden events " +
-                        "come back when you turn Sync with your Gmail off and on, or turn off Allow hiding in Settings."
+                        "come back when you turn Import from your Gmail off and on, or turn off Allow hiding in Settings."
                 )
             },
             confirmButton = {
@@ -441,5 +485,62 @@ fun CalendarScreen() {
             },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel") } }
         )
+    }
+}
+
+/**
+ * A Task or Event in the day list: Tasks have a circle to tick (crossed out when done), Events an outlined dot.
+ * Tap to edit, bin to delete (repeating ones ask This day only / All repeats).
+ */
+@Composable
+private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: PlanUi) {
+    val ctx = LocalContext.current
+    val c = Color(color)
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (item.kind == ItemKind.TASK) {
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .clickable { Plans.setDone(ctx, item, day, !done) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (done) Icons.Default.CheckCircle else ImageVector.vectorResource(R.drawable.ic_w_circle),
+                    contentDescription = if (done) "Done" else "Tick off", tint = c, modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+        } else {
+            Box(Modifier.padding(horizontal = 6.dp).size(12.dp).border(2.dp, c, CircleShape))
+            Spacer(Modifier.width(4.dp))
+        }
+        Column(
+            Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(6.dp))
+                .clickable { ui.edit(item, day) }
+                .padding(vertical = 2.dp)
+        ) {
+            Text(
+                item.title, style = MaterialTheme.typography.bodyLarge,
+                textDecoration = if (done) TextDecoration.LineThrough else null,
+                color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                listOfNotNull(
+                    Plan.timeText(item),
+                    item.repeat?.describe(),
+                    if (item.undated) (if (done) "Done" else "No date") else null,
+                    item.kind.label,
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = { ui.delete(item, day) }) {
+            Icon(Icons.Default.Delete, contentDescription = "Delete ${item.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

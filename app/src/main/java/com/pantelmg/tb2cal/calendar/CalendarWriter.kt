@@ -17,7 +17,7 @@ import java.util.TimeZone
 
 data class CalInfo(val id: Long, val name: String)
 
-/** An event read from the phone's Gmail calendars ("Sync with your Gmail"). Read-only. */
+/** An event read from the phone's Gmail calendars ("Import from your Gmail"). Read-only. */
 data class GmailEvent(
     val title: String, val beginMs: Long, val endMs: Long, val allDay: Boolean, val color: Int,
     /** The event (all its repeats share it); Used for hiding. */
@@ -110,6 +110,31 @@ object CalendarWriter {
         return uri?.let { ContentUris.parseId(it) } ?: error("The calendar rejected the event")
     }
 
+    /** Data management import: Saves an imported TimeBlock in TB2Cal's phone calendar, unless it's there. Blocking. */
+    fun insertTimeBlock(ctx: Context, h: com.pantelmg.tb2cal.model.HistoryEntry) {
+        val cal = localCalendar(ctx) ?: return
+        val label = "${Fmt.duration(h.activeMs)} ${h.name}"
+        val exists = runCatching {
+            ctx.contentResolver.query(
+                Events.CONTENT_URI, arrayOf(Events._ID),
+                "${Events.CALENDAR_ID}=? AND ${Events.DELETED}=0 AND ${Events.TITLE}=? AND ${Events.DTSTART}=?",
+                arrayOf(cal.id.toString(), label, h.startWallMs.toString()), null
+            )?.use { it.moveToFirst() } ?: false
+        }.getOrDefault(false)
+        if (exists) return
+        val values = ContentValues().apply {
+            put(Events.CALENDAR_ID, cal.id)
+            put(Events.TITLE, label)
+            put(Events.DESCRIPTION, "TB2Cal · Active ${Fmt.duration(h.activeMs)}")
+            put(Events.DTSTART, h.startWallMs)
+            put(Events.DTEND, h.startWallMs + h.activeMs)
+            put(Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+            put(Events.AVAILABILITY, Events.AVAILABILITY_BUSY)
+            GoogleColors.byKey(h.colorKey)?.let { put(Events.EVENT_COLOR, it.argb.toInt()) }
+        }
+        runCatching { ctx.contentResolver.insert(Events.CONTENT_URI, values) }
+    }
+
     /** Deletes a TimeBlock's event from TB2Cal's own calendar (only ever that calendar). Blocking. */
     fun deleteFromLocal(ctx: Context, label: String, startMs: Long) {
         val cal = localCalendar(ctx) ?: return
@@ -126,6 +151,101 @@ object CalendarWriter {
                 arrayOf(cal.id.toString(), label, startMs.toString())
             )
         }
+    }
+
+    private fun localSyncUri(base: android.net.Uri): android.net.Uri = base.buildUpon()
+        .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+        .appendQueryParameter(Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT)
+        .appendQueryParameter(Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
+        .build()
+
+    /** Shows or hides TB2Cal's phone calendar (completed TimeBlocks and Events) in other calendar apps. Blocking. */
+    fun setLocalVisible(ctx: Context, visible: Boolean) {
+        val cal = localCalendar(ctx) ?: return
+        runCatching {
+            ctx.contentResolver.update(
+                ContentUris.withAppendedId(localSyncUri(Calendars.CONTENT_URI), cal.id),
+                ContentValues().apply { put(Calendars.VISIBLE, if (visible) 1 else 0) }, null, null
+            )
+        }
+    }
+
+    private fun utcStamp(ms: Long): String =
+        java.text.SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", java.util.Locale.ROOT)
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(java.util.Date(ms))
+
+    /** RFC 5545 rule for a TB2Cal repeat ("FREQ=WEEKLY;INTERVAL=1;BYDAY=SA;COUNT=13"). */
+    private fun rrule(r: com.pantelmg.tb2cal.model.Repeat, allDay: Boolean): String = buildString {
+        append("FREQ=").append(
+            when (r.unit) {
+                com.pantelmg.tb2cal.model.RepeatUnit.DAY -> "DAILY"
+                com.pantelmg.tb2cal.model.RepeatUnit.WEEK -> "WEEKLY"
+                com.pantelmg.tb2cal.model.RepeatUnit.MONTH -> "MONTHLY"
+                com.pantelmg.tb2cal.model.RepeatUnit.YEAR -> "YEARLY"
+            }
+        )
+        append(";INTERVAL=").append(r.every.coerceAtLeast(1))
+        if (r.unit == com.pantelmg.tb2cal.model.RepeatUnit.WEEK) {
+            append(";WKST=MO;BYDAY=").append(r.days.sorted().joinToString(",") { listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")[it - 1] })
+        }
+        r.count?.let { append(";COUNT=").append(it) }
+        r.endDay?.let { end ->
+            // Through the end of that day.
+            val endMs = if (allDay) end * 86_400_000L
+            else com.pantelmg.tb2cal.model.Plan.dayStartMs(end + 1) - 1000
+            append(";UNTIL=").append(if (allDay) utcStamp(endMs).substring(0, 8) else utcStamp(endMs))
+        }
+    }
+
+    /**
+     * Writes an Event into TB2Cal's phone calendar (replacing its earlier copy), repeats included, with the days
+     * taken out of a repeat as exceptions. Returns the new id, or null without calendar access. Blocking.
+     */
+    fun upsertEvent(ctx: Context, item: com.pantelmg.tb2cal.model.PlanItem, color: Int): Long? {
+        val cal = localCalendar(ctx) ?: return null
+        item.providerId?.let { deleteEvent(ctx, it) }
+        val plan = com.pantelmg.tb2cal.model.Plan
+        val r = item.repeat
+        val first = if (r != null) plan.firstDay(r) ?: return null else item.day ?: return null
+        val allDay = item.allDay || item.startMin == null
+        val values = ContentValues().apply {
+            put(Events.CALENDAR_ID, cal.id)
+            put(Events.TITLE, item.title)
+            put(Events.DESCRIPTION, "TB2Cal · Event")
+            put(Events.EVENT_COLOR, color)
+            put(Events.AVAILABILITY, Events.AVAILABILITY_BUSY)
+            if (allDay) {
+                put(Events.ALL_DAY, 1)
+                put(Events.EVENT_TIMEZONE, "UTC")
+                put(Events.DTSTART, first * 86_400_000L)
+            } else {
+                put(Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+                put(Events.DTSTART, plan.startMs(item, first))
+            }
+            if (r == null) {
+                put(Events.DTEND, if (allDay) (first + 1) * 86_400_000L else plan.endMs(item, first))
+            } else {
+                val durSec = if (allDay) 86_400L else ((plan.endMs(item, first) - plan.startMs(item, first)) / 1000).coerceAtLeast(0)
+                put(Events.DURATION, "P${durSec}S")
+                put(Events.RRULE, rrule(r, allDay))
+                if (item.skipped.isNotEmpty()) {
+                    put(
+                        Events.EXDATE,
+                        item.skipped.sorted().joinToString(",") { d ->
+                            if (allDay) utcStamp(d * 86_400_000L).substring(0, 8) else utcStamp(plan.startMs(item, d))
+                        }
+                    )
+                }
+            }
+        }
+        return runCatching { ctx.contentResolver.insert(localSyncUri(Events.CONTENT_URI), values)?.let { ContentUris.parseId(it) } }
+            .getOrNull()
+    }
+
+    /** Removes an Event from TB2Cal's phone calendar. Blocking. */
+    fun deleteEvent(ctx: Context, providerId: Long) {
+        if (!hasPermission(ctx)) return
+        runCatching { ctx.contentResolver.delete(ContentUris.withAppendedId(localSyncUri(Events.CONTENT_URI), providerId), null, null) }
     }
 
     /**

@@ -11,5 +11,8 @@ class TB2CalApp : Application() {
         Repo.init(this)
         Engine.init(this)
         Notifications.createChannels(this)
+        // Tasks/Events: Reminder channel and the next reminder alarm.
+        com.pantelmg.tb2cal.plan.Reminders.createChannel(this)
+        com.pantelmg.tb2cal.plan.Reminders.schedule(this)
     }
 }

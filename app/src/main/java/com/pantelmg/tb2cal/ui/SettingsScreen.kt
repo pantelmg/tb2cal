@@ -81,9 +81,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
 import com.pantelmg.tb2cal.R
+import com.pantelmg.tb2cal.model.GoogleColors
+import com.pantelmg.tb2cal.plan.Plans
 import com.pantelmg.tb2cal.calendar.CalendarWriter
 import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.data.SoundStore
+import com.pantelmg.tb2cal.data.DataTransfer
+import android.widget.Toast
 import com.pantelmg.tb2cal.model.Vibration
 import com.pantelmg.tb2cal.reliability.Reliability
 import com.pantelmg.tb2cal.service.AlertService
@@ -98,7 +102,7 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData: () -> Unit) {
     val ctx = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val settings by Repo.settings.collectAsState()
@@ -136,6 +140,28 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
     }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) useSound(uri)
+    }
+    // Data management → Import: Read the picked .t2c file, then open Import Preview with it.
+    val dataScope = rememberCoroutineScope()
+    val dataFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        dataScope.launch {
+            val b = withContext(Dispatchers.IO) { runCatching { DataTransfer.read(ctx, uri) }.getOrNull() }
+            when {
+                b == null -> Toast.makeText(ctx, "This isn't a TB2Cal data file (.t2c).", Toast.LENGTH_LONG).show()
+                b.isEmpty -> Toast.makeText(ctx, "This file has no TB2Cal data.", Toast.LENGTH_LONG).show()
+                else -> {
+                    DataNav.mode = DataMode.IMPORT
+                    DataNav.bundle = b
+                    onOpenData()
+                }
+            }
+        }
+    }
+    fun openData(mode: DataMode) {
+        DataNav.mode = mode
+        DataNav.bundle = null
+        onOpenData()
     }
     val alertRunning by AlertService.runningFlow.collectAsState()
     // Leaving Settings stops a running test alert (a real TimeBlock alert keeps going).
@@ -194,7 +220,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         Text(
-            "Completion alert, secondary color, calendar preferences and background reliability.",
+            "Completion alert, secondary color, calendar and Task/Event preferences, data management and background reliability.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -380,7 +406,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
             SettingRow(
                 icon = rememberVectorPainter(Icons.Default.Email),
                 title = "Gmail account",
-                subtitle = "Its events are shown when Sync with your Gmail is on."
+                subtitle = "Its events are shown when Import from your Gmail is on."
             )
             Column(Modifier.padding(start = 56.dp, end = 8.dp, bottom = 8.dp)) {
                 when {
@@ -419,7 +445,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
                 icon = painterResource(R.drawable.ic_s_hide),
                 title = "Allow hiding Gmail events",
                 subtitle = "Hide appears next to Gmail events in the Calendar tab. Hidden events come back when " +
-                    "Sync with your Gmail is turned off and on.",
+                    "Import from your Gmail is turned off and on.",
                 onClick = { Repo.updateSettings { it.copy(allowHide = !it.allowHide) } },
                 trailing = {
                     Switch(
@@ -427,6 +453,88 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit) {
                         onCheckedChange = { v -> Repo.updateSettings { it.copy(allowHide = v) } }
                     )
                 }
+            )
+            RowDivider()
+
+            // Gmail events also on the Task/Event manager widget (Events list).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_w_target),
+                title = "Gmail events on the Task/Event widget",
+                subtitle = "Today's Gmail events also show in the widget's Events list (with Import from your Gmail on).",
+                onClick = { Repo.updateSettings { it.copy(widgetGmail = !it.widgetGmail) } },
+                trailing = {
+                    Switch(checked = settings.widgetGmail, onCheckedChange = { v -> Repo.updateSettings { it.copy(widgetGmail = v) } })
+                }
+            )
+            RowDivider()
+
+            // Completed TimeBlocks and Events in other calendar apps (TB2Cal's phone calendar shown or hidden).
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.DateRange),
+                title = "Visible to other calendar apps",
+                subtitle = "Completed TimeBlocks and Events also show in your phone's other calendar apps.",
+                onClick = {
+                    Repo.updateSettings { it.copy(othersSeeCalendar = !it.othersSeeCalendar) }
+                    Plans.applyVisibility(ctx)
+                },
+                trailing = {
+                    Switch(
+                        checked = settings.othersSeeCalendar,
+                        onCheckedChange = { v ->
+                            Repo.updateSettings { it.copy(othersSeeCalendar = v) }
+                            Plans.applyVisibility(ctx)
+                        }
+                    )
+                }
+            )
+            RowDivider()
+
+            // One color for all Tasks and one for all Events (presets only; changes past and future ones).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_task),
+                title = "Task and Event colors",
+                subtitle = "All tasks share one color, and all events another (outlined in the calendars)."
+            )
+            ColorChoiceRow("Tasks", settings.taskColor) { key -> Repo.updateSettings { it.copy(taskColor = key) } }
+            ColorChoiceRow("Events", settings.eventColor) { key ->
+                Repo.updateSettings { it.copy(eventColor = key) }
+                Plans.resyncEvents(ctx)
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ---- Data management (TB2Cal's own data only) ----
+        SectionLabel("Data management")
+        Card(Modifier.fillMaxWidth()) {
+            Text(
+                "Only TB2Cal's own TimeBlocks, Tasks and Events. Events imported from your Gmail stay in your Google " +
+                    "account; They're never exported, imported or deleted here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
+            )
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_export),
+                title = "Export",
+                subtitle = "Choose the days and save them as a .t2c file.",
+                onClick = { openData(DataMode.EXPORT) },
+                trailing = { Chevron() }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_import),
+                title = "Import",
+                subtitle = "Open a .t2c file, check its days, then merge or overwrite.",
+                onClick = { runCatching { dataFilePicker.launch(arrayOf("*/*")) } },
+                trailing = { Chevron() }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_delete),
+                title = "Delete",
+                subtitle = "Choose the days to delete from TB2Cal.",
+                onClick = { openData(DataMode.DELETE) },
+                trailing = { Chevron() }
             )
         }
 
@@ -579,5 +687,32 @@ private fun ChoiceRow(text: String, selected: Boolean, radio: Boolean, onClick: 
         if (radio) RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(8.dp))
         else Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(8.dp))
         Text(text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** A row of the preset colors (no custom ones), for Tasks or Events. */
+@Composable
+private fun ColorChoiceRow(label: String, current: String, onPick: (String) -> Unit) {
+    Column(Modifier.padding(start = 72.dp, end = 16.dp, bottom = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            GoogleColors.all.forEach { gc ->
+                val c = Color(gc.argb)
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .border(if (gc.key == current) 3.dp else 2.dp, if (gc.key == current) MaterialTheme.colorScheme.onSurface else c, CircleShape)
+                        .clickable { onPick(gc.key) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.size(if (gc.key == current) 14.dp else 0.dp).clip(CircleShape).background(c))
+                }
+            }
+        }
     }
 }

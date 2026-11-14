@@ -1,6 +1,21 @@
 package com.pantelmg.tb2cal.ui
 
 import android.widget.Toast
+import com.pantelmg.tb2cal.plan.Plans
+import com.pantelmg.tb2cal.model.PlanOccurrence
+import com.pantelmg.tb2cal.model.Plan
+import com.pantelmg.tb2cal.model.ItemKind
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
@@ -177,6 +192,10 @@ internal fun summarize(history: List<HistoryEntry>, start: LocalDate, end: Local
 fun StatsScreen() {
     val history by Repo.history.collectAsState()
     val settings by Repo.settings.collectAsState()
+    val planItems by Repo.items.collectAsState()
+    // TimeBlocks or Tasks/Events (remembered); In Tasks/Events: Tasks, Events or Both (remembered).
+    val te = settings.statsMode == "TE"
+    val which = settings.statsItems
     // Period and List/Graph are remembered (saved in the settings).
     val period = runCatching { StatsPeriod.valueOf(settings.statsPeriod) }.getOrDefault(StatsPeriod.WEEKLY)
     val graph = settings.statsGraph
@@ -197,6 +216,15 @@ fun StatsScreen() {
     val rows = remember(history, start, end) { summarize(history, start, end) }
     val total = rows.sumOf { it.totalMs }
     val max = rows.maxOfOrNull { it.totalMs } ?: 0L
+    // Tasks/Events of the period (done ones crossed out) and how many are completed.
+    val planRows = remember(planItems, start, end, which) {
+        Plan.occurrencesIn(planItems, start.toEpochDay(), end.toEpochDay(), tasks = which != "EVENTS", events = which != "TASKS")
+    }
+    val planDone = planRows.count { it.done }
+    var askExport by remember { mutableStateOf(false) }
+    var exTb by remember { mutableStateOf(true) }
+    var exTasks by remember { mutableStateOf(false) }
+    var exEvents by remember { mutableStateOf(false) }
 
     // Export: The user picks where to save; The graph of the selected period is written as a PDF.
     val ctx = LocalContext.current
@@ -209,9 +237,22 @@ fun StatsScreen() {
             val s0 = start
             val e0 = end
             val r0 = rows
+            val tb = exTb
+            val tk = exTasks
+            val ev = exEvents
+            // Tasks and/or Events: Only the completed ones of the period.
+            val done = if (tk || ev) {
+                Plan.occurrencesIn(planItems, start.toEpochDay(), end.toEpochDay(), tasks = tk, events = ev).filter { it.done }
+            } else emptyList()
+            val planTitle = when {
+                tk && ev -> "Completed tasks and events"
+                tk -> "Completed tasks"
+                ev -> "Completed events"
+                else -> null
+            }
             scope.launch {
                 val ok = withContext(Dispatchers.IO) {
-                    runCatching { StatsPdf.write(ctx, uri, snapshot, r0, p, t, s0, e0) }.isSuccess
+                    runCatching { StatsPdf.write(ctx, uri, snapshot, r0, p, t, s0, e0, tb, planTitle, done) }.isSuccess
                 }
                 Toast.makeText(ctx, if (ok) "PDF saved." else "Couldn't save the PDF.", Toast.LENGTH_SHORT).show()
             }
@@ -225,23 +266,46 @@ fun StatsScreen() {
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
+        Text("Statistics", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        // Description, then TimeBlocks ⇄ Tasks/Events (fixed size, like TB Total) and Export PDF.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Statistics",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
+                if (te) "Your tasks and events of the period; Completed ones are crossed out."
+                else "Total time of completed TimeBlocks with the same name.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(
-                onClick = { exportPdf.launch(StatsPdf.fileName(period, start, end)) },
-                enabled = rows.isNotEmpty()
-            ) { Text("Export PDF") }
+            Spacer(Modifier.width(8.dp))
+            val boxShape = RoundedCornerShape(10.dp)
+            Box(
+                Modifier
+                    .clip(boxShape)
+                    .border(1.dp, MaterialTheme.colorScheme.primary, boxShape)
+                    .clickable { Repo.updateSettings { it.copy(statsMode = if (te) "TB" else "TE") } }
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Tasks/Events", style = MaterialTheme.typography.titleSmall, modifier = Modifier.alpha(0f), maxLines = 1)
+                Text(if (te) "Tasks/Events" else "TimeBlocks", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+            }
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .clip(boxShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
+                    .clickable {
+                        exTb = !te
+                        exTasks = te && which != "EVENTS"
+                        exEvents = te && which != "TASKS"
+                        askExport = true
+                    }
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Export PDF", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
         }
-        Text(
-            "Total time of completed TimeBlocks with the same name.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         Spacer(Modifier.height(8.dp))
 
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -268,11 +332,15 @@ fun StatsScreen() {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = { offset++ }, enabled = offset < 0) {
+            // Tasks/Events can also be looked at ahead (planned ones).
+            IconButton(onClick = { offset++ }, enabled = offset < 0 || te) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
             }
         }
 
+        if (te) {
+            PlanStats(planRows, planDone, which)
+        } else {
         // ---- Total + List/Graph switch ----
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -350,6 +418,49 @@ fun StatsScreen() {
                 }
             }
         }
+        }
+    }
+
+    if (askExport) {
+        AlertDialog(
+            onDismissRequest = { askExport = false },
+            title = { Text("Export PDF") },
+            text = {
+                Column {
+                    Text(
+                        "${title(period, offset, start, end)}. Tasks and Events list the completed ones.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    listOf(
+                        Triple("TimeBlocks", exTb) { v: Boolean -> exTb = v },
+                        Triple("Tasks", exTasks) { v: Boolean -> exTasks = v },
+                        Triple("Events", exEvents) { v: Boolean -> exEvents = v },
+                    ).forEach { (label, on, set) ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable { set(!on) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = on, onCheckedChange = null, modifier = Modifier.padding(8.dp))
+                            Text(label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = exTb || exTasks || exEvents,
+                    onClick = {
+                        askExport = false
+                        exportPdf.launch(StatsPdf.fileName(period, start, end))
+                    }
+                ) { Text("Export") }
+            },
+            dismissButton = { TextButton(onClick = { askExport = false }) { Text("Cancel") } }
+        )
     }
 
     toDelete?.let { r ->
@@ -459,6 +570,74 @@ private fun StatsGraph(
                     ColorDot(r.colorKey, 10.dp)
                     Spacer(Modifier.width(4.dp))
                     Text(r.name, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+    }
+}
+
+/** Statistics in Tasks/Events mode: Completed count + Tasks/Events/Both, then the period's list (done crossed out). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ColumnScope.PlanStats(rows: List<PlanOccurrence>, done: Int, which: String) {
+    Card(Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("$done", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    when (which) { "TASKS" -> "Tasks completed"; "EVENTS" -> "Events completed"; else -> "Tasks+Events completed" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            SingleChoiceSegmentedButtonRow {
+                listOf("TASKS" to "Tasks", "EVENTS" to "Events", "BOTH" to "Both").forEachIndexed { i, (key, label) ->
+                    SegmentedButton(
+                        selected = which == key,
+                        onClick = { Repo.updateSettings { it.copy(statsItems = key) } },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
+                        icon = {}
+                    ) { Text(label, maxLines = 1) }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    if (rows.isEmpty()) {
+        Text(
+            when (which) { "TASKS" -> "No tasks in this period."; "EVENTS" -> "No events in this period."; else -> "No tasks or events in this period." },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
+        return
+    }
+    // Only this list scrolls, and only if it doesn't fit.
+    LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(rows) { o ->
+            val c = Color(Plans.color(o.item.kind))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(14.dp)
+                        .border(2.dp, c, if (o.item.kind == ItemKind.TASK) RoundedCornerShape(4.dp) else CircleShape)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        o.item.title, style = MaterialTheme.typography.titleMedium,
+                        textDecoration = if (o.done) TextDecoration.LineThrough else null,
+                        color = if (o.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        listOfNotNull(
+                            Plan.shortDate(o.day ?: Plan.dayOf(o.startMs)),
+                            if (o.day == null) "Done" else Plan.timeText(o.item),
+                            o.item.kind.label,
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

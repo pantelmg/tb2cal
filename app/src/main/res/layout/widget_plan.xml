@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Task/Event manager: (icon) Tasks/Events ▾ (tap to switch list) · ‹ Today › (day) · + (add), then that day's list. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/plan_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:paddingStart="12dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/plan_header"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/plan_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginEnd="6dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_w_list_both" />
+
+            <TextView
+                android:id="@+id/plan_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Tasks/Events ▾"
+                android:textColor="#FFFFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Day: Fixed in place; Tap the day to go back to Today. -->
+        <ImageButton
+            android:id="@+id/plan_prev"
+            android:layout_width="26dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Previous day"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_w_prev" />
+
+        <TextView
+            android:id="@+id/plan_day"
+            android:layout_width="44dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="Today"
+            android:textColor="#FFFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/plan_next"
+            android:layout_width="26dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Next day"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_w_next" />
+
+        <!-- Same circle as the TimeBlock manager's Timer/Stopwatch button. -->
+        <ImageButton
+            android:id="@+id/plan_add"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_mode_bg"
+            android:contentDescription="Add a task or event"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_w_add" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/plan_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none" />
+
+        <TextView
+            android:id="@+id/plan_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="Nothing for today."
+            android:textColor="#B3FFFFFF"
+            android:textSize="14sp" />
+    </FrameLayout>
+</LinearLayout>

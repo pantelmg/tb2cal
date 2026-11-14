@@ -93,5 +93,12 @@ class AlarmReceiver : BroadcastReceiver() {
 
 /** Reboot (incl. Xiaomi/HTC quick-boot) and app updates. */
 class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) = KeepAlive.revive(context)
+    override fun onReceive(context: Context, intent: Intent) {
+        KeepAlive.revive(context)
+        // Alarms don't survive a reboot: Re-arm the next task/event reminder too.
+        runCatching {
+            com.pantelmg.tb2cal.data.Repo.init(context)
+            com.pantelmg.tb2cal.plan.Reminders.schedule(context)
+        }
+    }
 }

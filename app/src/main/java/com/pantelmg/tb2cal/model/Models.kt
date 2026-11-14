@@ -235,6 +235,20 @@ data class Settings(
     val allowHide: Boolean = false,
     val hiddenEvents: Set<Long> = emptySet(),
     val hiddenInstances: Set<String> = emptySet(),
+    /** Tasks and Events: One preset color each, for all of them (outline style). */
+    val taskColor: String = "1",
+    val eventColor: String = "6",
+    /** Completed TimeBlocks and Events shown in other calendar apps (TB2Cal's phone calendar visible). */
+    val othersSeeCalendar: Boolean = true,
+    /** Task/Event manager widget: "BOTH" (Tasks/Events), "TASKS" or "EVENTS"; And whether it shows Gmail events. */
+    val planWidgetList: String = "BOTH",
+    /** Task/Event manager widget: The day shown (epoch day) and the day it was picked on (back to Today at midnight). */
+    val planWidgetDay: Long = -1,
+    val planWidgetDaySetOn: Long = -1,
+    val widgetGmail: Boolean = false,
+    /** Statistics: "TB" (TimeBlocks) or "TE" (Tasks/Events); In Tasks/Events: "TASKS", "EVENTS" or "BOTH". */
+    val statsMode: String = "TB",
+    val statsItems: String = "BOTH",
 ) {
 
     /** Countdown minutes of a TimeBlock: Its own, or the default. */
@@ -256,6 +270,10 @@ data class Settings(
         .put("goalsPeriod", goalsPeriod)
         .put("onwardOff", org.json.JSONArray().also { a -> onwardOff.forEach { a.put(it) } })
         .put("accent", accent)
+        .put("taskColor", taskColor).put("eventColor", eventColor).put("othersSee", othersSeeCalendar)
+        .put("planList", planWidgetList).put("widgetGmail", widgetGmail)
+        .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn)
+        .put("statsMode", statsMode).put("statsItems", statsItems)
         .put("dayEntries", dayEntries).put("gmailAccount", gmailAccount).put("allowHide", allowHide)
         .put("holidayOff", org.json.JSONArray().also { a -> holidayOff.forEach { a.put(it) } })
         .put("hidden", org.json.JSONArray().also { a -> hiddenEvents.forEach { a.put(it) } })
@@ -297,6 +315,15 @@ data class Settings(
             goalsPeriod = o.optString("goalsPeriod").ifEmpty { "WEEKLY" },
             accent = o.optString("accent"),
             dayEntries = o.optInt("dayEntries", 3).coerceIn(3, 5),
+            taskColor = o.optString("taskColor").ifEmpty { "1" },
+            eventColor = o.optString("eventColor").ifEmpty { "6" },
+            othersSeeCalendar = o.optBoolean("othersSee", true),
+            planWidgetList = o.optString("planList").ifEmpty { "BOTH" },
+            planWidgetDay = o.optLong("planDay", -1L),
+            planWidgetDaySetOn = o.optLong("planDayOn", -1L),
+            widgetGmail = o.optBoolean("widgetGmail"),
+            statsMode = o.optString("statsMode").ifEmpty { "TB" },
+            statsItems = o.optString("statsItems").ifEmpty { "BOTH" },
             gmailAccount = o.optString("gmailAccount"),
             allowHide = o.optBoolean("allowHide"),
             holidayOff = o.optJSONArray("holidayOff")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),

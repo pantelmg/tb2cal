@@ -47,7 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.pantelmg.tb2cal.calendar.CalendarWriter
 
-enum class Screen { MAIN, CALENDAR, STATS, GOALS, EDIT, PRESETS, SETTINGS, COMPLETION, RELIABILITY }
+enum class Screen { MAIN, CALENDAR, STATS, GOALS, EDIT, PRESETS, SETTINGS, COMPLETION, RELIABILITY, DATA }
 
 class MainActivity : ComponentActivity() {
     private val navRequest = MutableStateFlow<Screen?>(null)
@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onResume() {
+        com.pantelmg.tb2cal.plan.Plans.onAppResume(this)
         super.onResume()
         // Opening the app (icon, widget, notification…) shows a waiting timer's completion screen first; There DONE
         // stops the alert. Otherwise, opening the app silences the alert.
@@ -178,8 +179,11 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
         }
     }
     BackHandler(enabled = screen != Screen.MAIN) {
-        if (screen != Screen.COMPLETION) screen = Screen.MAIN
-        else completionFinished()?.let { screen = it }
+        when (screen) {
+            Screen.COMPLETION -> completionFinished()?.let { screen = it }
+            Screen.DATA -> screen = Screen.SETTINGS
+            else -> screen = Screen.MAIN
+        }
     }
     FirstRunPermissions()
 
@@ -233,7 +237,9 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
             Screen.SETTINGS -> SettingsScreen(
                 onBack = { screen = Screen.MAIN },
                 onOpenReliability = { screen = Screen.RELIABILITY },
+                onOpenData = { screen = Screen.DATA },
             )
+            Screen.DATA -> DataScreen(onBack = { screen = Screen.SETTINGS })
             Screen.COMPLETION -> CompletionScreen(onDone = { completionFinished()?.let { screen = it } })
             Screen.RELIABILITY -> ReliabilityScreen(onBack = { screen = Screen.MAIN })
         }

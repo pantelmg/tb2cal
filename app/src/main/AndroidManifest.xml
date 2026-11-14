@@ -87,6 +87,37 @@
                 android:resource="@xml/widget_month_info" />
         </receiver>
 
+        <!-- Widget "+": Add a task or event in a sheet over the home screen. -->
+        <activity
+            android:name=".ui.QuickAddActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/Theme.TB2Cal.Translucent"
+            android:windowSoftInputMode="adjustResize" />
+
+        <receiver
+            android:name=".widget.PlanWidget"
+            android:exported="true"
+            android:label="@string/plan_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_plan_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.PlanWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <receiver
+            android:name=".plan.ReminderReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".service.BootReceiver"
             android:exported="true">

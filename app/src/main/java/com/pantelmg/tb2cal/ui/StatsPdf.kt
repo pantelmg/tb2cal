@@ -9,6 +9,8 @@ import android.net.Uri
 import com.pantelmg.tb2cal.model.Fmt
 import com.pantelmg.tb2cal.model.GoogleColors
 import com.pantelmg.tb2cal.model.HistoryEntry
+import com.pantelmg.tb2cal.model.Plan
+import com.pantelmg.tb2cal.model.PlanOccurrence
 import java.io.IOException
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -28,7 +30,7 @@ internal object StatsPdf {
     private const val DEFAULT_COLOR = 0xFF1565C0.toInt()
 
     /**
-     * "TB2Cal " + only the period shown: Daily "11 Nov 2026", weekly "09 to 15 Nov 2026" or "27 Oct to 02 Nov 2026"
+     * "TB2Cal Statistics " + only the period shown: Daily "11 Nov 2026", weekly "09 to 15 Nov 2026" or "27 Oct to 02 Nov 2026"
      * (and "29 Dec 2025 to 04 Jan 2026" across years), monthly "Oct 2026", yearly "2026".
      */
     fun fileName(period: StatsPeriod, start: LocalDate, end: LocalDate): String {
@@ -44,7 +46,7 @@ internal object StatsPdf {
             StatsPeriod.MONTHLY -> f(start, "MMM yyyy")
             StatsPeriod.YEARLY -> "${start.year}"
         }
-        return "TB2Cal $name.pdf"
+        return "TB2Cal Statistics $name.pdf"
     }
 
     fun write(
@@ -56,6 +58,11 @@ internal object StatsPdf {
         periodTitle: String,
         start: LocalDate,
         end: LocalDate,
+        /** The TimeBlocks graph and table. */
+        includeTimeBlocks: Boolean = true,
+        /** Tasks and/or Events: Section title ("Completed tasks"…), or null for none; And the completed ones. */
+        planTitle: String? = null,
+        planDone: List<PlanOccurrence> = emptyList(),
     ) {
         val locale = Locale.getDefault()
         val doc = PdfDocument()
@@ -81,13 +88,16 @@ internal object StatsPdf {
             val count = rows.sumOf { it.count }
             c.drawText("TB2Cal · Statistics", M, 60f, title)
             c.drawText("${period.label} · $periodTitle", M, 82f, bold)
-            c.drawText("Total: ${Fmt.duration(total)} · $count TimeBlock(s)", M, 100f, text)
+            if (includeTimeBlocks) c.drawText("Total: ${Fmt.duration(total)} · $count TimeBlock(s)", M, 100f, text)
+            else if (planTitle != null) c.drawText("${planDone.size} completed", M, 100f, text)
             val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", locale))
             c.drawText("Exported $now", M, 116f, gray)
 
+            val right = W - M
+            var y = 140f
+            if (includeTimeBlocks) {
             // ---- Graph ----
             val left = M + 40f
-            val right = W - M
             val top = 150f
             val bottom = 420f
             val n = statsBucketCount(period, start, end)
@@ -134,7 +144,7 @@ internal object StatsPdf {
                 c.drawText("Share", colShare, y, boldRight)
                 c.drawLine(M, y + 6f, right, y + 6f, axis)
             }
-            var y = bottom + 66f
+            y = bottom + 66f
             header(y)
             y += 24f
             rows.forEach { r ->
@@ -156,6 +166,53 @@ internal object StatsPdf {
                 c.drawText(String.format(locale, "%.1f%%", share), colShare, y, textRight)
                 c.drawLine(M, y + 6f, right, y + 6f, line)
                 y += 20f
+            }
+            }
+
+            // ---- Completed tasks / events ----
+            if (planTitle != null) {
+                val colTime = M + 92f
+                val colTitle = M + 190f
+                fun planHeader(at: Float) {
+                    c.drawText("Date", M, at, bold)
+                    c.drawText("Time", colTime, at, bold)
+                    c.drawText("Title", colTitle, at, bold)
+                    c.drawText("Type", right, at, boldRight)
+                    c.drawLine(M, at + 6f, right, at + 6f, axis)
+                }
+                fun newPage() {
+                    doc.finishPage(page)
+                    pageNo++
+                    page = doc.startPage(PdfDocument.PageInfo.Builder(W, H, pageNo).create())
+                    c = page.canvas
+                    y = M + 20f
+                }
+                y += if (includeTimeBlocks) 30f else 0f
+                if (y > H - M - 60f) newPage()
+                c.drawText(planTitle, M, y, title.let { Paint(it).apply { textSize = 15f } })
+                y += 24f
+                if (planDone.isEmpty()) {
+                    c.drawText("None completed in this period.", M, y, gray)
+                } else {
+                    planHeader(y)
+                    y += 24f
+                    planDone.forEach { o ->
+                        if (y > H - M) {
+                            newPage()
+                            planHeader(y)
+                            y += 24f
+                        }
+                        val day = o.day ?: Plan.dayOf(o.startMs)
+                        c.drawText(Plan.shortDate(day), M, y, text)
+                        val time = if (o.day == null) "Done " + java.text.SimpleDateFormat("HH:mm", locale).format(java.util.Date(o.startMs))
+                        else Plan.timeText(o.item) ?: "—"
+                        c.drawText(ellipsize(time, text, colTitle - colTime - 8f), colTime, y, text)
+                        c.drawText(ellipsize(o.item.title, text, right - 60f - colTitle), colTitle, y, text)
+                        c.drawText(o.item.kind.label, right, y, textRight)
+                        c.drawLine(M, y + 6f, right, y + 6f, line)
+                        y += 20f
+                    }
+                }
             }
             doc.finishPage(page)
 

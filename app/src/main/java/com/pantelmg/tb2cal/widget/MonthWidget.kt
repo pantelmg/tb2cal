@@ -112,7 +112,7 @@ class MonthWidget : AppWidgetProvider() {
             var gridStart = month
             while (gridStart.dayOfWeek != firstDow) gridStart = gridStart.minusDays(1)
             val gridEnd = gridStart.plusDays(42)
-            // Completed TimeBlocks, plus Gmail events when "Sync with your Gmail" is on.
+            // Completed TimeBlocks, plus Gmail events when "Import from your Gmail" is on.
             val byDay: Map<LocalDate, List<DayItem>> =
                 runCatching {
                     // TB Total on: Same-name TimeBlocks of a day merged, as in the Calendar tab.
@@ -175,10 +175,23 @@ class MonthWidget : AppWidgetProvider() {
             blocks.take(count).forEachIndexed { i, b ->
                 val id = CHIP_IDS[i]
                 c.setViewVisibility(id, View.VISIBLE)
-                c.setTextViewText(id, b.label)
+                // Done tasks are crossed out.
+                c.setTextViewText(
+                    id,
+                    if (b.done) android.text.SpannableString(b.label).apply {
+                        setSpan(android.text.style.StrikethroughSpan(), 0, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    } else b.label
+                )
                 val base = b.color
                 // Days of the neighbouring months: Same chips, half transparent.
                 val color = if (inMonth) base else (base and 0x00FFFFFF) or 0x80000000.toInt()
+                if (b.plan != null) {
+                    // Tasks and Events: Transparent with an outline, text in their color.
+                    c.setInt(id, "setBackgroundResource", R.drawable.widget_chip_outline)
+                    c.setTextColor(id, color)
+                    if (Build.VERSION.SDK_INT >= 31) c.setColorStateList(id, "setBackgroundTintList", ColorStateList.valueOf(color))
+                    return@forEachIndexed
+                }
                 // White text, or black on light colors (yellow, white…); Dimmed on neighbouring months.
                 val text = GoogleColors.textOn(base)
                 c.setTextColor(id, if (inMonth) text else (text and 0x00FFFFFF) or 0x99000000.toInt())

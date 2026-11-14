@@ -145,7 +145,8 @@ fun CompletionScreen(onDone: () -> Unit) {
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
-                        c.eventId?.let { eventId ->
+                        // Only while TB2Cal's phone calendar is visible to other apps (Settings).
+                        c.eventId?.takeIf { Repo.settings.value.othersSeeCalendar }?.let { eventId ->
                             TextButton(onClick = {
                                 // Always asks which calendar app to open it in (every one that can, except TB2Cal).
                                 runCatching {
