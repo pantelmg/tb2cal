@@ -5,6 +5,8 @@ import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.model.Fmt
 import com.pantelmg.tb2cal.model.GoogleColors
 import com.pantelmg.tb2cal.model.HistoryEntry
+import com.pantelmg.tb2cal.model.Settings
+import kotlinx.coroutines.launch
 import com.pantelmg.tb2cal.model.ItemKind
 import com.pantelmg.tb2cal.model.Plan
 import com.pantelmg.tb2cal.model.PlanItem
@@ -132,26 +134,68 @@ object CalendarData {
     fun sorted(map: Map<LocalDate, List<DayItem>>): Map<LocalDate, List<DayItem>> =
         map.mapValues { (_, list) -> list.sortedWith(compareByDescending<DayItem> { it.allDay }.thenBy { it.startMs }) }
 
-    /** Items per day for [from, toExclusive). Blocking (reads the phone's calendar): Call off the main thread. */
-    fun byDay(ctx: Context, from: LocalDate, toExclusive: LocalDate): Map<LocalDate, List<DayItem>> {
+    // ---- Gmail events: Read from the phone's calendar storage (slow), kept in memory for instant redraws ----
+
+    /** The last Gmail events read per month grid (and account/languages), most recent 8. */
+    private val gmailCache = object : LinkedHashMap<String, List<GmailEvent>>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<GmailEvent>>?) = size > 8
+    }
+
+    fun gmailKey(from: LocalDate, toExclusive: LocalDate, st: Settings) =
+        "$from|$toExclusive|${st.gmailAccount}|${st.holidayOff.sorted()}"
+
+    /** Gmail events read before for this range (maybe a little old), or null. */
+    fun cachedGmail(from: LocalDate, toExclusive: LocalDate, st: Settings): List<GmailEvent>? =
+        synchronized(gmailCache) { gmailCache[gmailKey(from, toExclusive, st)] }
+
+    /** Reads the Gmail events of [from, toExclusive) and keeps them. Blocking: Call off the main thread. */
+    fun fetchGmail(ctx: Context, from: LocalDate, toExclusive: LocalDate, st: Settings = Repo.settings.value): List<GmailEvent> {
         val zone = ZoneId.systemDefault()
         val fromMs = from.atStartOfDay(zone).toInstant().toEpochMilli()
         val toMs = toExclusive.atStartOfDay(zone).toInstant().toEpochMilli()
-        val out = ownByDay(Repo.history.value, Repo.items.value, from, toExclusive)
-        fun add(d: LocalDate, item: DayItem) {
-            if (!d.isBefore(from) && d.isBefore(toExclusive)) out.getOrPut(d) { mutableListOf() } += item
-        }
-        // TimeBlocks that were once copied to Gmail aren't shown twice.
-        val blockKeys = out.values.flatten().filter { it.isTimeBlock }.map { it.label to it.startMs }.toSet()
+        val events = CalendarWriter.gmailEvents(ctx, fromMs - 86_400_000L, toMs + 86_400_000L, st.gmailAccount, st.holidayOff)
+        synchronized(gmailCache) { gmailCache[gmailKey(from, toExclusive, st)] = events }
+        return events
+    }
 
-        // Gmail events (read-only), skipping TimeBlocks that were once copied there
-        // Only the chosen account, without the languages turned off, and without hidden events (when hiding is on).
+    /** The 6-week grid of a month (from the locale's first day of the week), as in the Calendar tab and widget. */
+    fun gridStart(month: LocalDate, locale: java.util.Locale = java.util.Locale.getDefault()): LocalDate {
+        val firstDow = java.time.temporal.WeekFields.of(locale).firstDayOfWeek
+        var d = month.withDayOfMonth(1)
+        while (d.dayOfWeek != firstDow) d = d.minusDays(1)
+        return d
+    }
+
+    private val prefetchScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
+    /** Opening the app: Reads this month's Gmail events in the background, so the Calendar tab shows them at once. */
+    fun prefetch(ctx: Context) {
+        val app = ctx.applicationContext
         val st = Repo.settings.value
-        if (st.gmailView) {
+        if (!st.gmailView) return
+        prefetchScope.launch {
+            val g = gridStart(LocalDate.now())
+            runCatching { fetchGmail(app, g, g.plusDays(42), st) }
+        }
+    }
+
+    /**
+     * [own] plus the Gmail [events] as shown: Without hidden ones (when hiding is on) and without TimeBlocks that were
+     * once copied there; All-day ones on each of their days. Then sorted. Quick: Fine on the main thread.
+     */
+    fun withGmail(
+        own: Map<LocalDate, List<DayItem>>, events: List<GmailEvent>?, from: LocalDate, toExclusive: LocalDate, st: Settings,
+    ): Map<LocalDate, List<DayItem>> {
+        val out = own.mapValues { (_, l) -> l.toMutableList() }.toMutableMap()
+        if (st.gmailView && events != null) {
+            val zone = ZoneId.systemDefault()
+            fun add(d: LocalDate, item: DayItem) {
+                if (!d.isBefore(from) && d.isBefore(toExclusive)) out.getOrPut(d) { mutableListOf() } += item
+            }
+            val blockKeys = own.values.flatten().filter { it.isTimeBlock }.map { it.label to it.startMs }.toSet()
             val hidden = if (st.allowHide) st.hiddenEvents else emptySet()
             val hiddenOnce = if (st.allowHide) st.hiddenInstances else emptySet()
-            CalendarWriter.gmailEvents(ctx, fromMs - 86_400_000L, toMs + 86_400_000L, st.gmailAccount, st.holidayOff)
-                .forEach { e ->
+            events.forEach { e ->
                 if ((e.title to e.beginMs) in blockKeys || e.eventId in hidden || "${e.eventId}@${e.beginMs}" in hiddenOnce) return@forEach
                 val item = DayItem(
                     e.title, e.color, e.beginMs, e.endMs, e.allDay, isTimeBlock = false,
@@ -171,5 +215,12 @@ object CalendarData {
             }
         }
         return sorted(out)
+    }
+
+    /** Items per day for [from, toExclusive) (widgets). Blocking (reads the phone's calendar): Call off the main thread. */
+    fun byDay(ctx: Context, from: LocalDate, toExclusive: LocalDate): Map<LocalDate, List<DayItem>> {
+        val st = Repo.settings.value
+        val own = ownByDay(Repo.history.value, Repo.items.value, from, toExclusive)
+        return withGmail(own, if (st.gmailView) fetchGmail(ctx, from, toExclusive, st) else null, from, toExclusive, st)
     }
 }

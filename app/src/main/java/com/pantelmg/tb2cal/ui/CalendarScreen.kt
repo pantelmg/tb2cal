@@ -124,18 +124,31 @@ fun CalendarScreen() {
 
     val month = today.withDayOfMonth(1).plusMonths(monthOffset.toLong())
     val firstDow = WeekFields.of(locale).firstDayOfWeek
-    var gridStart = month
-    while (gridStart.dayOfWeek != firstDow) gridStart = gridStart.minusDays(1)
+    val gridStart = CalendarData.gridStart(month, locale)
     val gridEnd = gridStart.plusDays(42)
 
-    var byDay by remember { mutableStateOf<Map<LocalDate, List<DayItem>>>(emptyMap()) }
-    LaunchedEffect(
-        gridStart, history, planItems, settings.taskColor, settings.eventColor, settings.gmailView,
-        settings.gmailAccount, settings.holidayOff, settings.allowHide, settings.hiddenEvents, settings.hiddenInstances, tick
-    ) {
-        byDay = withContext(Dispatchers.IO) {
-            runCatching { CalendarData.byDay(ctx, gridStart, gridEnd) }.getOrDefault(emptyMap())
+    // Shown at once: TB2Cal's own TimeBlocks, Tasks and Events (from memory, in the first frame), plus the Gmail
+    // events read before for this month (kept in memory). The Gmail events are read again in the background, and
+    // the months before and after are read ahead for the arrows.
+    val own = remember(gridStart, history, planItems, settings.taskColor, settings.eventColor) {
+        CalendarData.ownByDay(history, planItems, gridStart, gridEnd)
+    }
+    val gmailKey = CalendarData.gmailKey(gridStart, gridEnd, settings)
+    var gmail by remember(gmailKey) { mutableStateOf(CalendarData.cachedGmail(gridStart, gridEnd, settings)) }
+    LaunchedEffect(gmailKey, settings.gmailView, tick) {
+        if (!settings.gmailView) return@LaunchedEffect
+        val st = settings
+        withContext(Dispatchers.IO) { runCatching { CalendarData.fetchGmail(ctx, gridStart, gridEnd, st) }.getOrNull() }
+            ?.let { gmail = it }
+        withContext(Dispatchers.IO) {
+            listOf(-1L, 1L).forEach { m ->
+                val g = CalendarData.gridStart(month.plusMonths(m), locale)
+                if (CalendarData.cachedGmail(g, g.plusDays(42), st) == null) runCatching { CalendarData.fetchGmail(ctx, g, g.plusDays(42), st) }
+            }
         }
+    }
+    val byDay = remember(own, gmail, settings.gmailView, settings.allowHide, settings.hiddenEvents, settings.hiddenInstances) {
+        CalendarData.withGmail(own, gmail, gridStart, gridEnd, settings)
     }
 
     // TB Total on: Same-name TimeBlocks of a day are shown merged (grid and list).

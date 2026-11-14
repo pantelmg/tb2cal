@@ -130,6 +130,7 @@ class MainActivity : ComponentActivity() {
         TimeblockService.ensureRunning(this) // revive if the OS killed it while we were away
         Reliability.resumeTick.value++
         com.pantelmg.tb2cal.widget.Widgets.refreshSoon(this) // Picks up new Gmail events (in the background)
+        com.pantelmg.tb2cal.calendar.CalendarData.prefetch(this) // This month's Gmail events, ready for the Calendar tab
     }
 
     private fun handle(i: Intent?) {
