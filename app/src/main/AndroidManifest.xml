@@ -63,6 +63,21 @@
             android:name=".service.AlarmReceiver"
             android:exported="false" />
 
+
+
+        <!-- Widgets, in the order of the widget picker: Calendar, TimeBlock manager, Task/Event manager. -->
+        <receiver
+            android:name=".widget.MonthWidget"
+            android:exported="true"
+            android:label="@string/month_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_month_info" />
+        </receiver>
+
         <receiver
             android:name=".widget.TB2CalWidget"
             android:exported="true"
@@ -76,15 +91,15 @@
         </receiver>
 
         <receiver
-            android:name=".widget.MonthWidget"
+            android:name=".widget.PlanWidget"
             android:exported="true"
-            android:label="@string/month_widget_name">
+            android:label="@string/plan_widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/widget_month_info" />
+                android:resource="@xml/widget_plan_info" />
         </receiver>
 
         <!-- Widget "+": Add a task or event in a sheet over the home screen. -->
@@ -96,18 +111,6 @@
             android:taskAffinity=""
             android:theme="@style/Theme.TB2Cal.Translucent"
             android:windowSoftInputMode="adjustResize" />
-
-        <receiver
-            android:name=".widget.PlanWidget"
-            android:exported="true"
-            android:label="@string/plan_widget_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_plan_info" />
-        </receiver>
 
         <service
             android:name=".widget.PlanWidgetService"

@@ -152,7 +152,7 @@ object Reminders {
 
     fun createChannel(ctx: Context) {
         val ch = NotificationChannel(CHANNEL, "Task and event reminders", NotificationManager.IMPORTANCE_HIGH).apply {
-            description = "At the time of a task or event that has one."
+            description = "Before or at the start of a task or event that has a time (Settings: Remind me before)."
         }
         ctx.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
     }
@@ -165,7 +165,7 @@ object Reminders {
     /** Arms the alarm for the next reminder (or clears it). */
     fun schedule(ctx: Context) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
-        val next = Plan.nextReminder(Repo.items.value, System.currentTimeMillis())
+        val next = Plan.nextReminder(Repo.items.value, System.currentTimeMillis(), Repo.settings.value.remindBefore)
         val pi = firePi(ctx)
         if (next == null) {
             am.cancel(pi)
@@ -183,7 +183,9 @@ object Reminders {
         val now = System.currentTimeMillis()
         val nm = ctx.getSystemService(NotificationManager::class.java)
         // Anything due in the last minute (the alarm can be a few seconds late).
-        val due = (Plan.dueAt(Repo.items.value, now) + Plan.dueAt(Repo.items.value, now - 60_000L)).distinctBy { it.item.id }
+        val before = Repo.settings.value.remindBefore
+        val due = (Plan.dueAt(Repo.items.value, now, before) + Plan.dueAt(Repo.items.value, now - 60_000L, before))
+            .distinctBy { it.item.id }
         due.forEach { o ->
             val item = o.item
             val day = o.day ?: return@forEach
@@ -191,7 +193,12 @@ object Reminders {
             val b = NotificationCompat.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_tb)
                 .setContentTitle("${item.kind.label}: ${item.title}")
-                .setContentText(Plan.timeText(item) ?: "Now")
+                .setContentText(
+                    when {
+                        before == 0 -> Plan.timeText(item) ?: "Now"
+                        else -> "In ${reminderLead(before)} · ${Plan.timeText(item) ?: ""}".trimEnd(' ', '·')
+                    }
+                )
                 .setColor(Plans.color(item.kind))
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -222,6 +229,9 @@ object Reminders {
     }
 
     internal fun notificationId(id: String, day: Long) = id.hashCode() xor day.toInt()
+
+    /** "10 min", "1 h". */
+    fun reminderLead(min: Int) = if (min % 60 == 0) "${min / 60} h" else "$min min"
 }
 
 /** Reminder alarm, and the reminder's "Done" button. */

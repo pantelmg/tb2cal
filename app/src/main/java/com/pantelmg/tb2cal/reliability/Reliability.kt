@@ -67,6 +67,10 @@ object Reliability {
             ctx.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
 
     /** Number of steps still open (manual ones count until confirmed). */
+    /** The last count from [openIssues], so the main screen starts with it (no card popping in or out). */
+    @Volatile
+    var lastIssues: Int? = null
+
     fun openIssues(ctx: Context, s: Settings): Int {
         val gmail = s.gmailView // Account sync only matters when the Calendar tab shows Gmail events
         return listOf(
@@ -80,7 +84,7 @@ object Reliability {
         isXiaomi && !s.ackFloating,
         isXiaomi && !s.ackBatterySaver,
         gmail && !syncOk(ctx),
-        ).count { it }
+        ).count { it }.also { lastIssues = it }
     }
 
     /**

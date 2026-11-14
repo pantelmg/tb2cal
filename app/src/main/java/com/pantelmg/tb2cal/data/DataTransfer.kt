@@ -28,19 +28,23 @@ import java.util.Locale
 class DataBundle(
     val from: Long, val to: Long, val timeBlocks: List<HistoryEntry>, val items: List<PlanItem>,
     val madeOn: Long = Plan.today(),
+    /** All time: Everything, with whole items (never-ending repeats stay never-ending); [from]–[to] only shows the
+     *  first and last day with data. */
+    val allTime: Boolean = false,
 ) {
     val tasks: Int get() = items.count { it.kind == ItemKind.TASK }
     val events: Int get() = items.count { it.kind == ItemKind.EVENT }
     val isEmpty: Boolean get() = timeBlocks.isEmpty() && items.isEmpty()
 
     fun toJson(): JSONObject = JSONObject()
-        .put("app", "TB2Cal").put("format", 1).put("from", from).put("to", to).put("madeOn", madeOn)
+        .put("app", "TB2Cal").put("kind", "data").put("format", 1).put("from", from).put("to", to).put("madeOn", madeOn).put("allTime", allTime)
         .put("timeBlocks", JSONArray().also { a -> timeBlocks.forEach { a.put(it.toJson()) } })
         .put("items", JSONArray().also { a -> items.forEach { a.put(it.toJson()) } })
 
     companion object {
         fun fromJson(o: JSONObject): DataBundle {
-            if (o.optString("app") != "TB2Cal") throw IOException("Not a TB2Cal data file.")
+            // (Files without "kind" are from before it was added: Data files.)
+            if (o.optString("app") != "TB2Cal" || o.optString("kind", "data") != "data") throw IOException("Not a TB2Cal data file.")
             val tb = o.optJSONArray("timeBlocks")
             val it = o.optJSONArray("items")
             return DataBundle(
@@ -48,6 +52,7 @@ class DataBundle(
                 if (tb == null) emptyList() else List(tb.length()) { i -> HistoryEntry.fromJson(tb.getJSONObject(i)) },
                 if (it == null) emptyList() else List(it.length()) { i -> PlanItem.fromJson(it.getJSONObject(i)) },
                 o.optLong("madeOn", o.getLong("to")),
+                o.optBoolean("allTime", false),
             )
         }
     }
@@ -76,7 +81,10 @@ object DataTransfer {
         }
     }
 
-    fun fileName(from: Long, to: Long) = "TB2Cal Data ${rangeName(from, to)}.t2c"
+    /** "TB2Cal Data 09 to 15 Nov 2026.t2c", or for All time with the export day: "TB2Cal Data All time 14 Nov 2026.t2c". */
+    fun fileName(from: Long, to: Long, allTime: Boolean = false, today: Long = Plan.today()) =
+        if (allTime) "TB2Cal Data All time ${LocalDate.ofEpochDay(today).format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH))}.t2c"
+        else "TB2Cal Data ${rangeName(from, to)}.t2c"
 
     /** The day an undated task belongs to: The day it was done, or (still open) [openDay] (today, or a file's export day). */
     fun undatedDay(item: PlanItem, openDay: Long = Plan.today()) = item.doneAt?.let { Plan.dayOf(it) } ?: openDay
@@ -113,8 +121,44 @@ object DataTransfer {
             .mapNotNull { clip(it, from, to, openDay) },
     )
 
-    /** TB2Cal's own data in the range right now. */
-    fun current(from: Long, to: Long, pick: Pick) = collect(Repo.history.value, Repo.items.value, from, to, pick)
+    /**
+     * All time: Every TimeBlock, Task and Event (as picked), whole (not limited to a range). The bundle's from–to are
+     * the first and last day with data (today if there's none).
+     */
+    fun collectAll(history: List<HistoryEntry>, items: List<PlanItem>, pick: Pick, openDay: Long = Plan.today()): DataBundle {
+        val tb = if (pick.timeBlocks) history else emptyList()
+        val its = items.filter { (it.kind == ItemKind.TASK && pick.tasks) || (it.kind == ItemKind.EVENT && pick.events) }
+            .map { it.copy(providerId = null) }
+        var first = Long.MAX_VALUE
+        var last = Long.MIN_VALUE
+        fun see(d: Long) {
+            if (d < first) first = d
+            if (d > last) last = d
+        }
+        tb.forEach { see(Plan.dayOf(it.startWallMs)) }
+        its.forEach { i ->
+            val r = i.repeat
+            val d = i.day
+            when {
+                i.undated -> see(undatedDay(i, openDay))
+                r != null -> {
+                    see(r.startDay)
+                    lastDay(i)?.let { see(it) }
+                }
+                d != null -> see(d)
+            }
+        }
+        if (first == Long.MAX_VALUE) {
+            first = openDay
+            last = openDay
+        }
+        return DataBundle(first, last, tb, its, madeOn = openDay, allTime = true)
+    }
+
+    /** TB2Cal's own data in the range (or all of it) right now. */
+    fun current(from: Long, to: Long, pick: Pick, allTime: Boolean = false) =
+        if (allTime) collectAll(Repo.history.value, Repo.items.value, pick)
+        else collect(Repo.history.value, Repo.items.value, from, to, pick)
 
     fun write(ctx: Context, uri: Uri, b: DataBundle) {
         val out = ctx.contentResolver.openOutputStream(uri) ?: throw IOException("Can't open the file.")
@@ -169,14 +213,32 @@ object DataTransfer {
             }
     }
 
+    /** All time: Deletes all of TB2Cal's TimeBlocks, Tasks and Events (as picked), also from its phone calendar. */
+    fun deleteAll(ctx: Context, pick: Pick) {
+        val app = ctx.applicationContext
+        if (pick.timeBlocks) {
+            val gone = Repo.history.value
+            if (gone.isNotEmpty()) {
+                Repo.removeHistoryEntries(gone)
+                io.launch { gone.forEach { h -> CalendarWriter.deleteFromLocal(app, "${Fmt.duration(h.activeMs)} ${h.name}", h.startWallMs) } }
+            }
+        }
+        Repo.items.value
+            .filter { (it.kind == ItemKind.TASK && pick.tasks) || (it.kind == ItemKind.EVENT && pick.events) }
+            .forEach { Plans.delete(app, it) }
+    }
+
     /**
-     * Imports the file's data inside [from]–[to] (as picked). Overwrite: TB2Cal's data there is deleted first (same
+     * Imports the file's data inside [from]–[to] (as picked), or all of it ([allTime]). Overwrite: TB2Cal's data there is deleted first (same
      * rules as Delete). Merge: Both are kept, without adding the same TimeBlock or item twice.
      */
-    fun import(ctx: Context, b: DataBundle, from: Long, to: Long, pick: Pick, overwrite: Boolean): DataBundle {
+    fun import(ctx: Context, b: DataBundle, from: Long, to: Long, pick: Pick, overwrite: Boolean, allTime: Boolean = false): DataBundle {
         val app = ctx.applicationContext
-        val part = collect(b.timeBlocks, b.items, from, to, pick, openDay = b.madeOn)
-        if (overwrite) deleteRange(app, from, to, pick)
+        val part = if (allTime) collectAll(b.timeBlocks, b.items, pick, b.madeOn)
+        else collect(b.timeBlocks, b.items, from, to, pick, openDay = b.madeOn)
+        if (overwrite) {
+            if (allTime) deleteAll(app, pick) else deleteRange(app, from, to, pick)
+        }
 
         val have = Repo.history.value.map { it.name to it.startWallMs }.toSet()
         val newBlocks = part.timeBlocks.filter { (it.name to it.startWallMs) !in have }

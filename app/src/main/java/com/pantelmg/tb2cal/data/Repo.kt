@@ -12,6 +12,7 @@ import com.pantelmg.tb2cal.model.Settings
 import com.pantelmg.tb2cal.widget.MonthWidget
 import com.pantelmg.tb2cal.widget.PlanWidget
 import com.pantelmg.tb2cal.widget.TB2CalWidget
+import com.pantelmg.tb2cal.widget.Widgets
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -65,6 +66,14 @@ object Repo {
     fun setGoal(period: String, nameKey: String, startDay: Long, minutes: Int, onward: Boolean) {
         synchronized(lock) {
             val list = Goal.set(goals.value, period, nameKey, startDay, minutes, onward)
+            goals.value = list
+            writeList("goals", list) { it.toJson() }
+        }
+    }
+
+    /** Preferences import: Replaces all goals. */
+    fun setGoals(list: List<Goal>) {
+        synchronized(lock) {
             goals.value = list
             writeList("goals", list) { it.toJson() }
         }
@@ -231,9 +240,9 @@ object Repo {
     // ---- Helpers ----
     private fun changed() {
         if (::appCtx.isInitialized) {
+            // The TimeBlock manager is quick (no calendar reads): Right away. The others: In the background.
             runCatching { TB2CalWidget.refresh(appCtx) }
-            runCatching { MonthWidget.refresh(appCtx) }
-            runCatching { PlanWidget.refresh(appCtx) }
+            Widgets.refreshSoon(appCtx)
         }
     }
 
@@ -251,7 +260,12 @@ object Repo {
         return arr.toString()
     }
 
+    /**
+     * Saves a list. Completed TimeBlocks ("pending", "history") are written to disk before returning, so they're never
+     * lost; Everything else (TimeBlock list, goals, Tasks/Events) is written in the background, so taps stay instant.
+     */
     private fun <T> writeList(key: String, list: List<T>, toJson: (T) -> JSONObject) {
-        sp.edit().putString(key, toArray(list, toJson)).commit()
+        val e = sp.edit().putString(key, toArray(list, toJson))
+        if (key == "pending" || key == "history") e.commit() else e.apply()
     }
 }

@@ -1,0 +1,5 @@
+<!-- Task done: The outlined square, ticked. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:pathData="M6.6,4.1h10.8a2.5,2.5 0 0,1 2.5,2.5v10.8a2.5,2.5 0 0,1 -2.5,2.5h-10.8a2.5,2.5 0 0,1 -2.5,-2.5v-10.8a2.5,2.5 0 0,1 2.5,-2.5z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M7.6,12.2l3,3l5.8,-6.2" />
+</vector>

@@ -77,6 +77,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.pantelmg.tb2cal.R
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.pantelmg.tb2cal.model.ItemKind
 import com.pantelmg.tb2cal.model.Plan
 import com.pantelmg.tb2cal.model.PlanItem
@@ -226,11 +228,13 @@ private fun ChoiceCard(icon: Painter, color: Color, title: String, sub: String, 
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Square-y frame, like the widget's list icons.
+        val iconShape = RoundedCornerShape(12.dp)
         Box(
             Modifier
                 .size(40.dp)
-                .clip(CircleShape)
-                .border(2.dp, color, CircleShape),
+                .clip(iconShape)
+                .border(2.dp, color, iconShape),
             contentAlignment = Alignment.Center
         ) { Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp)) }
         Spacer(Modifier.width(16.dp))
@@ -623,5 +627,29 @@ fun ClockPickerDialog(minutes: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit
         confirmButton = { TextButton(onClick = { onPick(state.hour * 60 + state.minute); onDismiss() }) { Text("OK") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         text = { TimePicker(state = state) }
+    )
+}
+
+/**
+ * The square in front of a Task or Event (app lists; The widget uses the same drawables): Tasks an outlined square,
+ * ticked when done; Events a solid square of the same size.
+ */
+@Composable
+fun PlanMarker(kind: ItemKind, done: Boolean, color: Color, size: androidx.compose.ui.unit.Dp = 22.dp) {
+    Icon(
+        androidx.compose.ui.graphics.vector.ImageVector.vectorResource(
+            when {
+                kind == ItemKind.EVENT -> R.drawable.ic_w_box_solid
+                done -> R.drawable.ic_w_box_done
+                else -> R.drawable.ic_w_box
+            }
+        ),
+        contentDescription = when {
+            kind == ItemKind.EVENT -> null
+            done -> "Done"
+            else -> "Tick off"
+        },
+        tint = color,
+        modifier = Modifier.size(size)
     )
 }

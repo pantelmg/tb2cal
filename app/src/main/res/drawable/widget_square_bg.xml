@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Task/Event manager "+": Square-y outline (like the Add sheet's icon frames), same size and line as the
+     TimeBlock manager's mode circle. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#00000000" />
+    <stroke android:width="1.5dp" android:color="#B3FFFFFF" />
+    <corners android:radius="9dp" />
+</shape>

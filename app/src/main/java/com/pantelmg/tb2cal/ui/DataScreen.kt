@@ -139,9 +139,18 @@ fun DataScreen(onBack: () -> Unit) {
             }
         )
     }
-    val from = rangeA
-    val to = rangeA?.let { a -> rangeB ?: a }
+    // All time: Everything (whole items); The dates below then show the first and last day with data. Tapping a day
+    // or a date goes back to a range; Turning it off brings back the range chosen before.
+    var allTime by rememberSaveable { mutableStateOf(file?.allTime == true) }
+    val rangeFrom = rangeA
+    val rangeTo = rangeA?.let { a -> rangeB ?: a }
     fun choose(day: Long) {
+        if (allTime) {
+            allTime = false
+            rangeA = day
+            rangeB = null
+            return
+        }
         val a = rangeA
         if (a == null || rangeB != null) {
             rangeA = day
@@ -189,10 +198,15 @@ fun DataScreen(onBack: () -> Unit) {
     }
 
     // What the action would cover now.
-    val selection: DataBundle? = remember(from, to, srcHistory, srcItems, tickTb, tickTasks, tickEvents) {
-        if (from == null || to == null) null
-        else DataTransfer.collect(srcHistory, srcItems, from, to, pick, openDay)
+    val selection: DataBundle? = remember(allTime, rangeFrom, rangeTo, srcHistory, srcItems, tickTb, tickTasks, tickEvents) {
+        when {
+            allTime -> DataTransfer.collectAll(srcHistory, srcItems, pick, openDay)
+            rangeFrom == null || rangeTo == null -> null
+            else -> DataTransfer.collect(srcHistory, srcItems, rangeFrom, rangeTo, pick, openDay)
+        }
     }
+    val from = if (allTime) selection?.from else rangeFrom
+    val to = if (allTime) selection?.to else rangeTo
 
     var pickingFrom by remember { mutableStateOf(false) }
     var pickingTo by remember { mutableStateOf(false) }
@@ -212,7 +226,7 @@ fun DataScreen(onBack: () -> Unit) {
     fun doImport(overwrite: Boolean) {
         val f = file ?: return
         if (from == null || to == null) return
-        val added = runCatching { DataTransfer.import(ctx, f, from, to, pick, overwrite) }.getOrNull()
+        val added = runCatching { DataTransfer.import(ctx, f, from, to, pick, overwrite, allTime) }.getOrNull()
         Toast.makeText(
             ctx,
             when {
@@ -229,9 +243,9 @@ fun DataScreen(onBack: () -> Unit) {
         if (from == null || to == null) return
         val b = selection ?: return
         when (mode) {
-            DataMode.EXPORT -> runCatching { saver.launch(DataTransfer.fileName(from, to)) }
+            DataMode.EXPORT -> runCatching { saver.launch(DataTransfer.fileName(from, to, allTime)) }
             DataMode.IMPORT -> {
-                val existing = DataTransfer.current(from, to, pick)
+                val existing = DataTransfer.current(from, to, pick, allTime)
                 if (existing.isEmpty) doImport(overwrite = false) else askMerge = existing
             }
             DataMode.DELETE -> if (!b.isEmpty) askDelete = true
@@ -251,9 +265,9 @@ fun DataScreen(onBack: () -> Unit) {
         }
         Text(
             when (mode) {
-                DataMode.EXPORT -> "Tap the first and last day to export. Only TB2Cal's data; Events imported from your Gmail aren't included."
+                DataMode.EXPORT -> "Tap the first and last day to export, or choose All time. Only TB2Cal's data; Events imported from your Gmail aren't included."
                 DataMode.IMPORT -> "The file's days are chosen. Tap to change them. Only TB2Cal's data; Your Gmail isn't affected."
-                DataMode.DELETE -> "Tap the first and last day to delete. Only TB2Cal's data; Events imported from your Gmail aren't affected."
+                DataMode.DELETE -> "Tap the first and last day to delete, or choose All time. Only TB2Cal's data; Events imported from your Gmail aren't affected."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -314,8 +328,9 @@ fun DataScreen(onBack: () -> Unit) {
                             val day = date.toEpochDay()
                             val inMonth = date.month == month.month
                             val dayItems = shownByDay[date].orEmpty()
-                            val inRange = from != null && to != null && day in from..to
-                            val isEdge = day == from || day == to
+                            // All time: Every day is highlighted.
+                            val inRange = allTime || (from != null && to != null && day in from..to)
+                            val isEdge = !allTime && (day == from || day == to)
                             Column(
                                 Modifier
                                     .weight(1f)
@@ -393,12 +408,13 @@ fun DataScreen(onBack: () -> Unit) {
         Row(
             Modifier.fillMaxWidth().padding(top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("Between", style = MaterialTheme.typography.bodyLarge)
+            Text("Between", style = MaterialTheme.typography.bodyLarge, maxLines = 1)
             DateBox(from?.let { LocalDate.ofEpochDay(it).format(df) }) { pickingFrom = true }
-            Text("and", style = MaterialTheme.typography.bodyLarge)
+            Text("and", style = MaterialTheme.typography.bodyLarge, maxLines = 1)
             DateBox(to?.let { LocalDate.ofEpochDay(it).format(df) }) { pickingTo = true }
+            AllTimeBox(allTime) { allTime = !allTime }
         }
 
         // ---- Export: TimeBlocks, Tasks, Events ----
@@ -419,7 +435,7 @@ fun DataScreen(onBack: () -> Unit) {
                 when {
                     from == null || selection == null -> "Choose the days."
                     !pick.any -> "Tick at least one."
-                    selection.isEmpty -> "Nothing in these days."
+                    selection.isEmpty -> if (allTime) "No TB2Cal data." else "Nothing in these days."
                     else -> dataCounts(selection, pick)
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -440,6 +456,11 @@ fun DataScreen(onBack: () -> Unit) {
 
     if (pickingFrom) {
         DayPickerDialog(from ?: todayDay, onPick = { d ->
+            if (allTime) {
+                // From All time to a range: Keep the last day shown as its end.
+                allTime = false
+                rangeB = to
+            }
             rangeA = d
             val b = rangeB
             if (b != null && b < d) rangeB = d
@@ -447,6 +468,11 @@ fun DataScreen(onBack: () -> Unit) {
     }
     if (pickingTo) {
         DayPickerDialog(to ?: from ?: todayDay, onPick = { d ->
+            if (allTime) {
+                // From All time to a range: Keep the first day shown as its start.
+                allTime = false
+                rangeA = from
+            }
             val a = rangeA
             when {
                 a == null -> rangeA = d
@@ -462,9 +488,11 @@ fun DataScreen(onBack: () -> Unit) {
             title = { Text("TB2Cal already has data here") },
             text = {
                 Text(
-                    "These days already have ${dataCounts(existing, pick)}.\n\n" +
+                    (if (allTime) "TB2Cal already has ${dataCounts(existing, pick)}.\n\n"
+                    else "These days already have ${dataCounts(existing, pick)}.\n\n") +
                         "Merge: Keeps it and adds the file's data (nothing is added twice).\n" +
-                        "Overwrite: Deletes TB2Cal's data of these days first (as picked), then imports the file's.\n\n" +
+                        (if (allTime) "Overwrite: Deletes all of TB2Cal's data first (as ticked), then imports the file's.\n\n"
+                        else "Overwrite: Deletes TB2Cal's data of these days first (as ticked), then imports the file's.\n\n") +
                         "Events imported from your Gmail aren't affected."
                 )
             },
@@ -486,16 +514,20 @@ fun DataScreen(onBack: () -> Unit) {
             title = { Text("Delete from TB2Cal?") },
             text = {
                 Text(
-                    "${dataCounts(selection, pick)} between ${LocalDate.ofEpochDay(from).format(df)} and " +
+                    (if (allTime) "All of TB2Cal's ${dataCounts(selection, pick)} will be deleted from TB2Cal and from " +
+                        "TB2Cal's calendar on your phone, repeating ones whole."
+                    else "${dataCounts(selection, pick)} between ${LocalDate.ofEpochDay(from).format(df)} and " +
                         "${LocalDate.ofEpochDay(to).format(df)} will be deleted from TB2Cal and from TB2Cal's calendar on " +
-                        "your phone. Repeating Tasks and Events lose only their days in this range.\n\n" +
-                        "This doesn't affect events imported from your Gmail. This can't be undone."
+                        "your phone. Repeating Tasks and Events lose only their days in this range.") +
+                        "\n\nThis doesn't affect events imported from your Gmail. This can't be undone."
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     askDelete = false
-                    val ok = runCatching { DataTransfer.deleteRange(ctx, from, to, pick) }.isSuccess
+                    val ok = runCatching {
+                        if (allTime) DataTransfer.deleteAll(ctx, pick) else DataTransfer.deleteRange(ctx, from, to, pick)
+                    }.isSuccess
                     Toast.makeText(ctx, if (ok) "Deleted: ${dataCounts(selection, pick)}." else "Couldn't delete the data.", Toast.LENGTH_LONG).show()
                     if (ok) onBack()
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
@@ -514,10 +546,11 @@ private fun DateBox(text: String?, onClick: () -> Unit) {
             .clip(shape)
             .border(1.dp, MaterialTheme.colorScheme.outline, shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp)
+            .padding(horizontal = 8.dp, vertical = 7.dp)
     ) {
         Text(
             text ?: "DD/MM/YY",
+            maxLines = 1,
             style = MaterialTheme.typography.titleSmall,
             color = if (text == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
         )
@@ -537,5 +570,26 @@ private fun Tick(label: String, checked: Boolean, onClick: () -> Unit) {
         Checkbox(checked = checked, onCheckedChange = null)
         Spacer(Modifier.width(4.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** "All time", after the dates: Highlighted when on (then everything is included, whole). */
+@Composable
+private fun AllTimeBox(on: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        Modifier
+            .clip(shape)
+            .background(if (on) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+            .border(if (on) 2.dp else 1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 7.dp)
+    ) {
+        Text(
+            "All time",
+            maxLines = 1,
+            style = MaterialTheme.typography.titleSmall,
+            color = if (on) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

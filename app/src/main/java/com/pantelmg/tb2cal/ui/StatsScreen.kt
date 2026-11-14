@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Check
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
@@ -590,14 +592,37 @@ private fun ColumnScope.PlanStats(rows: List<PlanOccurrence>, done: Int, which: 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            SingleChoiceSegmentedButtonRow {
+            // Tasks / Events / Both, stacked (narrow), so the count and its description keep the room on the left.
+            Spacer(Modifier.width(12.dp))
+            val boxShape = RoundedCornerShape(14.dp)
+            Column(
+                Modifier
+                    .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+                    .clip(boxShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
+            ) {
                 listOf("TASKS" to "Tasks", "EVENTS" to "Events", "BOTH" to "Both").forEachIndexed { i, (key, label) ->
-                    SegmentedButton(
-                        selected = which == key,
-                        onClick = { Repo.updateSettings { it.copy(statsItems = key) } },
-                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 3),
-                        icon = {}
-                    ) { Text(label, maxLines = 1) }
+                    if (i > 0) androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                    val sel = which == key
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                            .clickable { Repo.updateSettings { it.copy(statsItems = key) } }
+                            .padding(start = 10.dp, end = 14.dp, top = 5.dp, bottom = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            androidx.compose.material.icons.Icons.Default.Check, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(16.dp).alpha(if (sel) 1f else 0f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            label, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                            color = if (sel) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -617,11 +642,7 @@ private fun ColumnScope.PlanStats(rows: List<PlanOccurrence>, done: Int, which: 
         items(rows) { o ->
             val c = Color(Plans.color(o.item.kind))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(14.dp)
-                        .border(2.dp, c, if (o.item.kind == ItemKind.TASK) RoundedCornerShape(4.dp) else CircleShape)
-                )
+                PlanMarker(o.item.kind, o.done && o.item.kind == ItemKind.TASK, c, 20.dp)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(

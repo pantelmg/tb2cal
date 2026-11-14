@@ -489,7 +489,8 @@ fun CalendarScreen() {
 }
 
 /**
- * A Task or Event in the day list: Tasks have a circle to tick (crossed out when done), Events an outlined dot.
+ * A Task or Event in the day list: Tasks have an outlined square to tick (crossed out when done), Events a solid
+ * square of the same size.
  * Tap to edit, bin to delete (repeating ones ask This day only / All repeats).
  */
 @Composable
@@ -497,24 +498,15 @@ private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: P
     val ctx = LocalContext.current
     val c = Color(color)
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (item.kind == ItemKind.TASK) {
-            Box(
-                Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .clickable { Plans.setDone(ctx, item, day, !done) },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    if (done) Icons.Default.CheckCircle else ImageVector.vectorResource(R.drawable.ic_w_circle),
-                    contentDescription = if (done) "Done" else "Tick off", tint = c, modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-        } else {
-            Box(Modifier.padding(horizontal = 6.dp).size(12.dp).border(2.dp, c, CircleShape))
-            Spacer(Modifier.width(4.dp))
-        }
+        // Same-size squares: Tasks outlined (tap to tick or untick), Events solid.
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .then(if (item.kind == ItemKind.TASK) Modifier.clickable { Plans.setDone(ctx, item, day, !done) } else Modifier),
+            contentAlignment = Alignment.Center
+        ) { PlanMarker(item.kind, done, c) }
+        Spacer(Modifier.width(6.dp))
         Column(
             Modifier
                 .weight(1f)

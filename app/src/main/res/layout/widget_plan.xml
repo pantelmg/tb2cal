@@ -82,7 +82,7 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:layout_marginEnd="4dp"
-            android:background="@drawable/widget_mode_bg"
+            android:background="@drawable/widget_square_bg"
             android:contentDescription="Add a task or event"
             android:padding="6dp"
             android:scaleType="fitCenter"

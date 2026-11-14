@@ -262,8 +262,12 @@ object Plan {
     fun openUndated(items: List<PlanItem>): List<PlanItem> =
         items.filter { it.undated && it.doneAt == null }.sortedBy { it.createdAt }
 
-    /** Next reminder time after [after] across timed tasks (not done that day) and timed events, or null. */
-    fun nextReminder(items: List<PlanItem>, after: Long): Long? {
+    /**
+     * Next reminder time after [after] across timed tasks (not done that day) and timed events, or null. Reminders
+     * come [beforeMin] minutes before the start (0: At the start). One whose time has already passed isn't given.
+     */
+    fun nextReminder(items: List<PlanItem>, after: Long, beforeMin: Int = 0): Long? {
+        val lead = beforeMin * 60_000L
         val today = dayOf(after)
         var best: Long? = null
         items.forEach { item ->
@@ -272,7 +276,7 @@ object Plan {
             val days = occurrences(item, today, today + 400)
             for (d in days) {
                 if (item.kind == ItemKind.TASK && d in item.doneDays) continue
-                val t = startMs(item, d)
+                val t = startMs(item, d) - lead
                 if (t > after) {
                     if (best == null || t < best!!) best = t
                     break
@@ -282,14 +286,16 @@ object Plan {
         return best
     }
 
-    /** What's due at [at] (to the minute): For the reminder notifications. */
-    fun dueAt(items: List<PlanItem>, at: Long): List<PlanOccurrence> {
-        val day = dayOf(at)
+    /** What's reminded at [at] (to the minute), [beforeMin] minutes before its start: For the notifications. */
+    fun dueAt(items: List<PlanItem>, at: Long, beforeMin: Int = 0): List<PlanOccurrence> {
+        val lead = beforeMin * 60_000L
+        // The reminder can be on the day before (e.g. 23:50 for 00:05).
+        val day = dayOf(at + lead)
         return items.mapNotNull { item ->
             if (item.startMin == null || (item.kind == ItemKind.EVENT && item.allDay) || item.undated) return@mapNotNull null
             if (occurrences(item, day, day + 1).isEmpty()) return@mapNotNull null
             if (item.kind == ItemKind.TASK && day in item.doneDays) return@mapNotNull null
-            val t = startMs(item, day)
+            val t = startMs(item, day) - lead
             if (t / 60_000L == at / 60_000L) PlanOccurrence(item, day, false) else null
         }
     }

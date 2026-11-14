@@ -83,10 +83,14 @@ import androidx.core.content.IntentCompat
 import com.pantelmg.tb2cal.R
 import com.pantelmg.tb2cal.model.GoogleColors
 import com.pantelmg.tb2cal.plan.Plans
+import com.pantelmg.tb2cal.plan.Reminders
 import com.pantelmg.tb2cal.calendar.CalendarWriter
 import com.pantelmg.tb2cal.data.Repo
 import com.pantelmg.tb2cal.data.SoundStore
 import com.pantelmg.tb2cal.data.DataTransfer
+import com.pantelmg.tb2cal.data.PrefsBundle
+import com.pantelmg.tb2cal.data.PrefsTransfer
+import androidx.compose.material3.AlertDialog
 import android.widget.Toast
 import com.pantelmg.tb2cal.model.Vibration
 import com.pantelmg.tb2cal.reliability.Reliability
@@ -158,6 +162,23 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             }
         }
     }
+    // Export/Import preferences (.t2cp): Saving runs off the main thread; Importing asks first (it overwrites).
+    var prefsToImport by remember { mutableStateOf<PrefsBundle?>(null) }
+    val prefsSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        dataScope.launch {
+            val ok = withContext(Dispatchers.IO) { runCatching { PrefsTransfer.write(ctx, uri) }.isSuccess }
+            Toast.makeText(ctx, if (ok) "Preferences exported." else "Couldn't save the file.", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val prefsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        dataScope.launch {
+            val b = withContext(Dispatchers.IO) { runCatching { PrefsTransfer.read(ctx, uri) }.getOrNull() }
+            if (b == null) Toast.makeText(ctx, "This isn't a TB2Cal preferences file (.t2cp).", Toast.LENGTH_LONG).show()
+            else prefsToImport = b
+        }
+    }
     fun openData(mode: DataMode) {
         DataNav.mode = mode
         DataNav.bundle = null
@@ -189,7 +210,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
         }
     }
     val version = remember {
-        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
+        com.pantelmg.tb2cal.BuildConfig.VERSION_NAME
     }
 
     fun openSoundPicker() {
@@ -220,7 +241,8 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         Text(
-            "Completion alert, secondary color, calendar and Task/Event preferences, data management and background reliability.",
+            "Completion alert, secondary color, calendar and Task/Event preferences, data management, export/import of " +
+                "preferences and background reliability.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -458,7 +480,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
 
             // Gmail events also on the Task/Event manager widget (Events list).
             SettingRow(
-                icon = painterResource(R.drawable.ic_w_target),
+                icon = painterResource(R.drawable.ic_w_list_both),
                 title = "Gmail events on the Task/Event widget",
                 subtitle = "Today's Gmail events also show in the widget's Events list (with Import from your Gmail on).",
                 onClick = { Repo.updateSettings { it.copy(widgetGmail = !it.widgetGmail) } },
@@ -466,6 +488,27 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
                     Switch(checked = settings.widgetGmail, onCheckedChange = { v -> Repo.updateSettings { it.copy(widgetGmail = v) } })
                 }
             )
+            RowDivider()
+
+            // The widget's ticked tasks and past events of the day: Crossed out until the day ends, or removed.
+            SettingRow(
+                icon = painterResource(R.drawable.ic_w_box_done),
+                title = "Completed on the Task/Event widget",
+                subtitle = "Ticked tasks and past events: Crossed out until the day ends, or removed from the list."
+            )
+            SingleChoiceSegmentedButtonRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp)
+            ) {
+                listOf("CROSS" to "Crossed out", "HIDE" to "Removed").forEachIndexed { i, (key, label) ->
+                    SegmentedButton(
+                        selected = settings.planWidgetDone == key,
+                        onClick = { Repo.updateSettings { it.copy(planWidgetDone = key) } },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 2)
+                    ) { Text(label) }
+                }
+            }
             RowDivider()
 
             // Completed TimeBlocks and Events in other calendar apps (TB2Cal's phone calendar shown or hidden).
@@ -489,6 +532,33 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             )
             RowDivider()
 
+            // Reminders for tasks and events with a time: At the start (default) or some minutes before.
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_clock),
+                title = "Remind me before",
+                subtitle = "Tasks and events with a time: " +
+                    if (settings.remindBefore == 0) "At the start." else "${Reminders.reminderLead(settings.remindBefore)} before the start."
+            )
+            SingleChoiceSegmentedButtonRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp)
+            ) {
+                val choices = listOf(0 to "Start", 5 to "5m", 10 to "10m", 15 to "15m", 30 to "30m")
+                choices.forEachIndexed { i, (min, label) ->
+                    SegmentedButton(
+                        selected = settings.remindBefore == min,
+                        onClick = {
+                            Repo.updateSettings { it.copy(remindBefore = min) }
+                            Reminders.schedule(ctx)
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = choices.size),
+                        icon = {}
+                    ) { Text(label, maxLines = 1) }
+                }
+            }
+            RowDivider()
+
             // One color for all Tasks and one for all Events (presets only; changes past and future ones).
             SettingRow(
                 icon = painterResource(R.drawable.ic_s_task),
@@ -508,7 +578,8 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
         Card(Modifier.fillMaxWidth()) {
             Text(
                 "Only TB2Cal's own TimeBlocks, Tasks and Events. Events imported from your Gmail stay in your Google " +
-                    "account; They're never exported, imported or deleted here.",
+                    "account; They're never exported, imported or deleted here. (Your TimeBlock list, goals and " +
+                    "settings: Export/Import preferences, below.)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
@@ -534,6 +605,34 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
                 title = "Delete",
                 subtitle = "Choose the days to delete from TB2Cal.",
                 onClick = { openData(DataMode.DELETE) },
+                trailing = { Chevron() }
+            )
+        }
+
+        // ---- Export/Import preferences (.t2cp) ----
+        SectionLabel("Export/Import preferences")
+        Card(Modifier.fillMaxWidth()) {
+            Text(
+                "Your TimeBlock list (names, colors and countdowns), goals and settings, in one .t2cp file: For a " +
+                    "backup or a new phone. This phone's own ones stay as they are: The completion sound, Gmail import " +
+                    "(on/off, account, languages, hidden events) and Background reliability.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
+            )
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_export),
+                title = "Export preferences",
+                subtitle = "Save them as a .t2cp file.",
+                onClick = { runCatching { prefsSaver.launch(PrefsTransfer.fileName()) } },
+                trailing = { Chevron() }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_import),
+                title = "Import preferences",
+                subtitle = "Open a .t2cp file; It overwrites your current ones.",
+                onClick = { runCatching { prefsPicker.launch(arrayOf("*/*")) } },
                 trailing = { Chevron() }
             )
         }
@@ -592,6 +691,29 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
                     .clickable { uriHandler.openUri("https://github.com/pantelmg") }
             )
         }
+    }
+
+    prefsToImport?.let { b ->
+        AlertDialog(
+            onDismissRequest = { prefsToImport = null },
+            title = { Text("Import preferences?") },
+            text = {
+                Text(
+                    "Your TimeBlock list, goals and settings will be overwritten by the file's (saved " +
+                        "${java.time.LocalDate.ofEpochDay(b.madeOn).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yy"))}). " +
+                        "This can't be undone.\n\nYour records (TimeBlocks, Tasks and Events) aren't changed, and neither " +
+                        "are this phone's completion sound, Gmail import and Background reliability settings."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefsToImport = null
+                    val ok = runCatching { PrefsTransfer.import(ctx, b) }.isSuccess
+                    Toast.makeText(ctx, if (ok) "Preferences imported." else "Couldn't import the preferences.", Toast.LENGTH_SHORT).show()
+                }) { Text("Overwrite", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { prefsToImport = null }) { Text("Cancel") } }
+        )
     }
 }
 

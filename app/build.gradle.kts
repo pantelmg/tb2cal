@@ -34,7 +34,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: Removes unused code and optimizes the rest (Compose is much faster to start this way).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName(if (keystore.exists()) "tb2cal" else "debug")
         }
         debug {
@@ -51,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // The version name, without asking the system for it at every screen load
     }
     lint {
         checkReleaseBuilds = false
@@ -68,4 +72,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
+    // Installs Compose's startup profiles (ahead-of-time compiled code) also for APKs installed outside Play.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 }

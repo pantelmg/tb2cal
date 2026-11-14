@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -92,6 +93,9 @@ import com.pantelmg.tb2cal.model.Status
 import com.pantelmg.tb2cal.reliability.Reliability
 import com.pantelmg.tb2cal.service.TimeblockService
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.produceState
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,15 +114,31 @@ fun MainScreen(
     val settings by Repo.settings.collectAsState()
     val pending by Repo.pending.collectAsState()
     val tick by Reliability.resumeTick.collectAsState()
-    val reliabilityIssues = remember(tick, settings) { Reliability.openIssues(ctx, settings) }
+    // Phone checks (some read the calendar storage): Off the main thread, and only when something they depend on
+    // changes, not on every setting change (like each digit typed in the countdown).
+    val firstIssues = remember { Reliability.lastIssues ?: Reliability.openIssues(ctx, settings) }
+    val reliabilityIssues by produceState(
+        firstIssues, tick, settings.gmailView, settings.ackAutostart, settings.ackFloating, settings.ackBatterySaver
+    ) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { Reliability.openIssues(ctx, Repo.settings.value) }.getOrDefault(value)
+        }
+    }
     val locked = session.active
     val density = LocalDensity.current
     val version = remember {
-        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
+        com.pantelmg.tb2cal.BuildConfig.VERSION_NAME
     }
-    // Where the bottom of the "TB2Cal" letters is (px from the header's top), for lining up the version.
-    var titleTopPx by remember { mutableFloatStateOf(0f) }
-    var titleBaselinePx by remember { mutableFloatStateOf(0f) }
+    // Where the bottom of the "TB2Cal" letters is (from the header's top), for lining up the version. Measured up
+    // front (not after the first layout), so the version is drawn in its place from the first frame.
+    val titleStyle = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold)
+    val titleMeasurer = rememberTextMeasurer(cacheSize = 1)
+    val versionTop = remember(titleStyle, density) {
+        val r = titleMeasurer.measure("TB2Cal", titleStyle, softWrap = false, maxLines = 1)
+        // The title row centers the text against the 40dp app symbol.
+        val rowH = maxOf(r.size.height.toFloat(), with(density) { 40.dp.toPx() })
+        with(density) { ((rowH - r.size.height) / 2f + r.firstBaseline).toDp() }
+    }
 
     // TimeBlock choice and mode live in settings, so the app and the widget always agree.
     val selected = blocks.firstOrNull { it.id == settings.lastBlockId } ?: blocks.firstOrNull()
@@ -183,14 +203,16 @@ fun MainScreen(
     val shownH = if (locked) (session.targetMs / 3_600_000).toString() else hours
     val shownM = if (locked) ((session.targetMs / 60_000) % 60).toString() else minutes
 
-    val clockText = when {
+    // The clock texts read the ticking time only inside ClockTexts, so each second redraws just the clock card
+    // (not the whole screen).
+    fun clockText(now: Long) = when {
         locked && session.mode == Mode.TIMER -> Fmt.clock(session.remainingMs(now), roundUp = true)
         locked -> Fmt.clock(session.elapsedMs(now))
         mode == Mode.TIMER -> Fmt.clock(targetMs)
         else -> Fmt.clock(0)
     }
     val tf = DateFormat.getTimeFormat(ctx)
-    val clockCaption = when {
+    fun clockCaption(now: Long) = when {
         !locked -> "Ready"
         session.status == Status.PAUSED -> "Paused"
         session.mode == Mode.TIMER ->
@@ -208,13 +230,7 @@ fun MainScreen(
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "TB2Cal",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        onTextLayout = { titleBaselinePx = it.firstBaseline },
-                        modifier = Modifier.onGloballyPositioned { titleTopPx = it.positionInParent().y }
-                    )
+                    Text("TB2Cal", style = titleStyle, softWrap = false, maxLines = 1)
                     Spacer(Modifier.width(12.dp))
                     AppSymbol(40.dp)
                 }
@@ -232,13 +248,12 @@ fun MainScreen(
             // starts where the box starts and sits on the same line as the bottom of the "TB2Cal" letters.
             Column(Modifier.width(IntrinsicSize.Max)) {
                 Row(Modifier.fillMaxWidth()) {
-                    val baseline = with(density) { (titleTopPx + titleBaselinePx).toDp() }
                     Text(
                         if (version.isNotEmpty()) "v$version" else "",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        modifier = if (baseline > 0.dp) Modifier.paddingFromBaseline(top = baseline) else Modifier
+                        modifier = Modifier.paddingFromBaseline(top = versionTop)
                     )
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
@@ -257,8 +272,8 @@ fun MainScreen(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Create TimeBlocks (and Tasks/Events), with your own conditions, to track and improve productivity. " +
-                "Completed TimeBlocks are registered in the app and the local Calendar.",
+            "Create TimeBlocks (and Tasks/Events) to track and improve productivity. Completed TimeBlocks are " +
+                "registered in-app.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -454,24 +469,7 @@ fun MainScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text(
-                        clockText,
-                        fontSize = clockSp,
-                        lineHeight = clockSp * 1.2f,
-                        maxLines = 1,
-                        softWrap = false,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center
-                    )
-                    if (showCaption) {
-                        Text(
-                            clockCaption,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    ClockTexts({ clockText(now) }, { clockCaption(now) }, clockSp, showCaption)
                 }
             }
         }
@@ -530,6 +528,29 @@ fun MainScreen(
                 }) { Text("STOP") }
             },
             dismissButton = { TextButton(onClick = { confirmStop = false }) { Text("Cancel") } }
+        )
+    }
+}
+
+/** The live clock and its caption. They read the ticking time here, so only this part redraws every second. */
+@Composable
+private fun ClockTexts(clock: () -> String, caption: () -> String, clockSp: androidx.compose.ui.unit.TextUnit, showCaption: Boolean) {
+    Text(
+        clock(),
+        fontSize = clockSp,
+        lineHeight = clockSp * 1.2f,
+        maxLines = 1,
+        softWrap = false,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Medium,
+        textAlign = TextAlign.Center
+    )
+    if (showCaption) {
+        Text(
+            caption(),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
