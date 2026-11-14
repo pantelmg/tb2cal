@@ -1,0 +1,955 @@
+package com.pantelmg.tb2cal.ui
+
+import android.app.Activity
+import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import com.pantelmg.tb2cal.calendar.LanguageCalendar
+import androidx.compose.runtime.produceState
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.core.content.IntentCompat
+import com.pantelmg.tb2cal.R
+import com.pantelmg.tb2cal.model.GoogleColors
+import com.pantelmg.tb2cal.model.Fmt
+import com.pantelmg.tb2cal.plan.Plans
+import com.pantelmg.tb2cal.plan.Reminders
+import com.pantelmg.tb2cal.calendar.CalendarWriter
+import com.pantelmg.tb2cal.data.Repo
+import com.pantelmg.tb2cal.data.SoundStore
+import com.pantelmg.tb2cal.data.DataTransfer
+import com.pantelmg.tb2cal.data.PrefsBundle
+import com.pantelmg.tb2cal.data.PrefsTransfer
+import androidx.compose.material3.AlertDialog
+import android.widget.Toast
+import com.pantelmg.tb2cal.model.Vibration
+import com.pantelmg.tb2cal.reliability.Reliability
+import com.pantelmg.tb2cal.service.AlertService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Settings, styled like the app's tabs: Big bold title, then grouped cards with a round icon per row.
+ * Completion alert (sound, volume, vibration, test) · Appearance (secondary color) · Background reliability ·
+ * Calendar access (only if missing).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData: () -> Unit) {
+    val ctx = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val settings by Repo.settings.collectAsState()
+    var hasCalPerm by remember { mutableStateOf(CalendarWriter.hasPermission(ctx)) }
+    val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        hasCalPerm = CalendarWriter.hasPermission(ctx)
+    }
+
+    // ---- Sound: Copied into the app right after picking, so it can't be "forgotten" later ----
+    val soundScope = rememberCoroutineScope()
+    var soundMsg by remember { mutableStateOf<String?>(null) }
+    fun useSound(picked: Uri?) {
+        if (picked == null) { // "Silent" in the picker
+            SoundStore.cleanup(ctx, keep = null)
+            Repo.updateSettings { it.copy(soundUri = "", soundTitle = null) }
+            return
+        }
+        soundMsg = "Saving sound…"
+        soundScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { SoundStore.import(ctx, picked) } }
+            r.onSuccess { st ->
+                Repo.updateSettings { it.copy(soundUri = st.uri, soundTitle = st.title) }
+                soundMsg = null
+            }.onFailure { soundMsg = "Couldn't read that sound file. Pick another one." }
+        }
+    }
+    val soundPicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == Activity.RESULT_OK) {
+            useSound(
+                r.data?.let {
+                    IntentCompat.getParcelableExtra(it, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+                }
+            )
+        }
+    }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) useSound(uri)
+    }
+    // Data management → Import: Read the picked .t2c file, then open Import Preview with it.
+    val dataScope = rememberCoroutineScope()
+    val dataFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        dataScope.launch {
+            val b = withContext(Dispatchers.IO) { runCatching { DataTransfer.read(ctx, uri) }.getOrNull() }
+            when {
+                b == null -> Toast.makeText(ctx, "This isn't a TB2Cal data file (.t2c).", Toast.LENGTH_LONG).show()
+                b.isEmpty -> Toast.makeText(ctx, "This file has no TB2Cal data.", Toast.LENGTH_LONG).show()
+                else -> {
+                    DataNav.mode = DataMode.IMPORT
+                    DataNav.bundle = b
+                    onOpenData()
+                }
+            }
+        }
+    }
+    var enterRemind by remember { mutableStateOf(false) }
+    // Export/Import preferences (.t2cp): Saving runs off the main thread; Importing asks first (it overwrites).
+    var prefsToImport by remember { mutableStateOf<PrefsBundle?>(null) }
+    val prefsSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        dataScope.launch {
+            val ok = withContext(Dispatchers.IO) { runCatching { PrefsTransfer.write(ctx, uri) }.isSuccess }
+            Toast.makeText(ctx, if (ok) "Preferences exported." else "Couldn't save the file.", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val prefsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        dataScope.launch {
+            val b = withContext(Dispatchers.IO) { runCatching { PrefsTransfer.read(ctx, uri) }.getOrNull() }
+            if (b == null) Toast.makeText(ctx, "This isn't a TB2Cal preferences file (.t2cp).", Toast.LENGTH_LONG).show()
+            else prefsToImport = b
+        }
+    }
+    fun openData(mode: DataMode) {
+        DataNav.mode = mode
+        DataNav.bundle = null
+        onOpenData()
+    }
+    val alertRunning by AlertService.runningFlow.collectAsState()
+    // Leaving Settings stops a running test alert (a real TimeBlock alert keeps going).
+    DisposableEffect(Unit) { onDispose { AlertService.stopTest(ctx) } }
+    val dark = isSystemInDarkTheme()
+
+    // Gmail accounts (most likely first) and the chosen account's multi-language calendars, read off the main thread.
+    val accounts by produceState(emptyList<String>(), hasCalPerm) {
+        value = withContext(Dispatchers.IO) { runCatching { CalendarWriter.gmailAccounts(ctx) }.getOrDefault(emptyList()) }
+    }
+    val account = settings.gmailAccount.takeIf { it in accounts } ?: accounts.firstOrNull()
+    val languages by produceState(emptyList<LanguageCalendar>(), account, hasCalPerm) {
+        value = if (account == null) emptyList()
+        else withContext(Dispatchers.IO) { runCatching { CalendarWriter.languageCalendars(ctx, account) }.getOrDefault(emptyList()) }
+    }
+
+    val soundLabel = remember(settings.soundUri, settings.soundTitle) {
+        when (val u = settings.soundUri) {
+            "" -> "Silent"
+            null -> "Default notification sound"
+            else -> settings.soundTitle
+                ?: runCatching { RingtoneManager.getRingtone(ctx, Uri.parse(u))?.getTitle(ctx) }.getOrNull()
+                    ?.takeIf { !it.all(Char::isDigit) }
+                ?: "Custom sound"
+        }
+    }
+    val version = remember {
+        com.pantelmg.tb2cal.BuildConfig.VERSION_NAME
+    }
+
+    fun openSoundPicker() {
+        val current: Uri? = when (val u = settings.soundUri) {
+            "" -> null
+            null -> RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            else -> Uri.parse(u)
+        }
+        val i = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION or RingtoneManager.TYPE_ALARM)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current)
+            .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "TimeBlock completed sound")
+        runCatching { soundPicker.launch(i) }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp)
+    ) {
+        // ---- Header (same style as the tabs) ----
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.offset(x = (-12).dp)) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        }
+        Text(
+            "Completion alert, secondary color, calendar and Task/Event preferences, data management, export/import of " +
+                "preferences and background reliability.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        // ---- Completion alert ----
+        SectionLabel("Completion alert")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_sound),
+                title = "Sound",
+                subtitle = soundLabel,
+                subtitleColor = MaterialTheme.colorScheme.primary,
+                onClick = { openSoundPicker() },
+                trailing = { Chevron() }
+            )
+            Row(
+                Modifier.padding(start = 64.dp, end = 8.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                TextButton(
+                    onClick = { runCatching { filePicker.launch(arrayOf("audio/*")) } },
+                    contentPadding = ButtonDefaults.TextButtonWithIconContentPadding
+                ) {
+                    Icon(painterResource(R.drawable.ic_s_folder), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Audio file…")
+                }
+                if (settings.soundUri != null) {
+                    TextButton(
+                        onClick = {
+                            SoundStore.cleanup(ctx, keep = null)
+                            Repo.updateSettings { it.copy(soundUri = null, soundTitle = null) }
+                        },
+                        contentPadding = ButtonDefaults.TextButtonWithIconContentPadding
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Reset to default")
+                    }
+                }
+            }
+            soundMsg?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 72.dp, end = 16.dp, bottom = 8.dp)
+                )
+            }
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_volume),
+                title = "Use media volume",
+                subtitle = if (settings.useMediaVolume) "Plays at the multimedia volume.\nRings even in silent mode."
+                else "Plays at the notification volume.\nFollows silent and vibrate mode.",
+                onClick = { Repo.updateSettings { it.copy(useMediaVolume = !it.useMediaVolume) } },
+                trailing = {
+                    Switch(
+                        checked = settings.useMediaVolume,
+                        onCheckedChange = { v -> Repo.updateSettings { it.copy(useMediaVolume = v) } }
+                    )
+                }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_vibration),
+                title = "Vibration",
+                subtitle = "Tap an option to feel it."
+            )
+            Column(Modifier.padding(start = 56.dp, end = 8.dp, bottom = 8.dp)) {
+                Vibration.entries.forEach { v ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable {
+                                Repo.updateSettings { it.copy(vibration = v) }
+                                AlertService.preview(ctx, v)
+                            }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = settings.vibration == v, onClick = null, modifier = Modifier.padding(8.dp))
+                        Text(v.label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = {
+                if (alertRunning) AlertService.stop(ctx, keepNotification = false)
+                else AlertService.start(ctx, "Test", test = true)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                if (alertRunning) Icons.Default.Close else Icons.Default.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(if (alertRunning) "Stop alert" else "Test alert")
+        }
+
+        // ---- Appearance ----
+        SectionLabel("Appearance")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_palette),
+                title = "Secondary color",
+                subtitle = "Buttons, switches and highlights: " +
+                    (Accents.byKey(settings.accent)?.name ?: "Phone's colors")
+            )
+            // "Phone's colors" (wallpaper, the default) first, then the offered colors.
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val options: List<Accents.Accent?> = listOf<Accents.Accent?>(null) + Accents.all
+                options.forEach { a ->
+                    val key = a?.key ?: ""
+                    val chosen = settings.accent == key || (a == null && Accents.byKey(settings.accent) == null)
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .then(
+                                if (a == null) Modifier.background(
+                                    Brush.sweepGradient(
+                                        listOf(Color(0xFFD0BCFF), Color(0xFFAAC7FF), Color(0xFF82D5C8), Color(0xFFDCC66E), Color(0xFFFFB0CA), Color(0xFFD0BCFF))
+                                    )
+                                ) else Modifier.background(Color(if (dark) a.dark.primary else a.light.primary))
+                            )
+                            .border(
+                                if (chosen) 3.dp else 1.dp,
+                                if (chosen) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant,
+                                CircleShape
+                            )
+                            .clickable { Repo.updateSettings { it.copy(accent = key) } },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (chosen) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = a?.name ?: "Phone's colors",
+                                tint = if (a == null) Color.Black else Color(if (dark) a.dark.onPrimary else a.light.onPrimary),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Calendar preferences ----
+        SectionLabel("Calendar preferences")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.DateRange),
+                title = "In-app Calendar: TimeBlocks/day",
+                subtitle = "Widget calendar's TimeBlock capacity increases with its size."
+            )
+            SingleChoiceSegmentedButtonRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp)
+            ) {
+                listOf(3, 4, 5).forEachIndexed { i, n ->
+                    SegmentedButton(
+                        selected = settings.dayEntries == n,
+                        onClick = { Repo.updateSettings { it.copy(dayEntries = n) } },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 3)
+                    ) { Text("$n") }
+                }
+            }
+            RowDivider()
+
+            // 1. Which Gmail account (the most likely one first and picked until you choose).
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.Email),
+                title = "Gmail account",
+                subtitle = "Its events are shown when Import from your Gmail is on."
+            )
+            Column(Modifier.padding(start = 56.dp, end = 8.dp, bottom = 8.dp)) {
+                when {
+                    !hasCalPerm -> Hint("Needs calendar access.")
+                    accounts.isEmpty() -> Hint("No Google account with a calendar on this phone.")
+                    else -> accounts.forEach { a ->
+                        ChoiceRow(a, selected = a == account, radio = true) {
+                            Repo.updateSettings { it.copy(gmailAccount = a) }
+                        }
+                    }
+                }
+            }
+            RowDivider()
+
+            // 2. Languages of the calendars that publish the same events in several languages (e.g. holidays).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_language),
+                title = "Gmail import: Languages",
+                subtitle = "For events in several languages, like holidays. Pick any, or none; Your other events " +
+                    "are always shown."
+            )
+            Column(Modifier.padding(start = 56.dp, end = 8.dp, bottom = 8.dp)) {
+                if (languages.isEmpty()) Hint("This account has no events in several languages.")
+                languages.forEach { l ->
+                    ChoiceRow("${l.language} · ${l.name}", selected = l.key !in settings.holidayOff, radio = false) {
+                        Repo.updateSettings {
+                            it.copy(holidayOff = if (l.key in it.holidayOff) it.holidayOff - l.key else it.holidayOff + l.key)
+                        }
+                    }
+                }
+            }
+            RowDivider()
+
+            // 3. Hiding Gmail events (Hide next to them in the Calendar tab).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_hide),
+                title = "Allow hiding Gmail events",
+                subtitle = "Hide appears next to Gmail events in the Calendar tab. Hidden events come back when " +
+                    "Import from your Gmail is turned off and on.",
+                onClick = { Repo.updateSettings { it.copy(allowHide = !it.allowHide) } },
+                trailing = {
+                    Switch(
+                        checked = settings.allowHide,
+                        onCheckedChange = { v -> Repo.updateSettings { it.copy(allowHide = v) } }
+                    )
+                }
+            )
+            RowDivider()
+
+            // Gmail events also on the Task/Event manager widget (Events list).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_w_list_both),
+                title = "Gmail events on the Task/Event widget",
+                subtitle = "Today's Gmail events also show in the widget's Events list (with Import from your Gmail on).",
+                onClick = { Repo.updateSettings { it.copy(widgetGmail = !it.widgetGmail) } },
+                trailing = {
+                    Switch(checked = settings.widgetGmail, onCheckedChange = { v -> Repo.updateSettings { it.copy(widgetGmail = v) } })
+                }
+            )
+            RowDivider()
+
+            // The widget's ticked tasks and past events of the day: Crossed out until the day ends, or removed.
+            SettingRow(
+                icon = painterResource(R.drawable.ic_w_box_done),
+                title = "Completed on the Task/Event widget",
+                subtitle = "Ticked tasks and past events: Crossed out until the day ends, or removed from the list."
+            )
+            SingleChoiceSegmentedButtonRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp)
+            ) {
+                listOf("CROSS" to "Crossed out", "HIDE" to "Removed").forEachIndexed { i, (key, label) ->
+                    SegmentedButton(
+                        selected = settings.planWidgetDone == key,
+                        onClick = { Repo.updateSettings { it.copy(planWidgetDone = key) } },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 2)
+                    ) { Text(label) }
+                }
+            }
+            RowDivider()
+
+            // Completed TimeBlocks and Events in other calendar apps (TB2Cal's phone calendar shown or hidden).
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.DateRange),
+                title = "Visible to other calendar apps",
+                subtitle = "Completed TimeBlocks and Events also show in your phone's other calendar apps.",
+                onClick = {
+                    Repo.updateSettings { it.copy(othersSeeCalendar = !it.othersSeeCalendar) }
+                    Plans.applyVisibility(ctx)
+                },
+                trailing = {
+                    Switch(
+                        checked = settings.othersSeeCalendar,
+                        onCheckedChange = { v ->
+                            Repo.updateSettings { it.copy(othersSeeCalendar = v) }
+                            Plans.applyVisibility(ctx)
+                        }
+                    )
+                }
+            )
+            RowDivider()
+
+            // Previous day editing: OFF (default), past days are read-only; ON, they can be changed, and it shows.
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.DateRange),
+                title = "Allow previous day editing",
+                subtitle = "Removing past TimeBlocks, and adding, ticking, changing or removing Tasks/Events on past " +
+                    "days. OFF: Only today and later. ON: Allowed, and they show \"Added in retrospect\" or " +
+                    "\"Ticked later\" / \"Unticked later\" in the app and Statistics.",
+                onClick = { Repo.updateSettings { it.copy(allowPast = !it.allowPast) } },
+                trailing = {
+                    Switch(checked = settings.allowPast, onCheckedChange = { v -> Repo.updateSettings { it.copy(allowPast = v) } })
+                }
+            )
+            RowDivider()
+
+            // Reminders for tasks and events with a time: At the start (default) or some minutes before.
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_clock),
+                title = "Remind me before",
+                subtitle = "Tasks and events with a time: " +
+                    if (settings.remindBefore == 0) "At the start." else "${Reminders.reminderLead(settings.remindBefore)} before the start."
+            )
+            // Scrollable choices; Enter (any time, in hours and minutes) stays fixed on the right.
+            val remindChoices = listOf(0, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 1440)
+            val remindCustom = settings.remindBefore !in remindChoices
+            fun setRemind(min: Int) {
+                Repo.updateSettings { it.copy(remindBefore = min) }
+                Reminders.schedule(ctx)
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 72.dp, end = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    remindChoices.forEach { min ->
+                        ChoicePill(if (min == 0) "Start" else Fmt.duration(min * 60_000L), settings.remindBefore == min) { setRemind(min) }
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                ChoicePill("Enter", remindCustom) { enterRemind = true }
+            }
+            if (enterRemind) {
+                RemindEnterDialog(
+                    settings.remindBefore,
+                    onSet = { setRemind(it) },
+                    onDismiss = { enterRemind = false }
+                )
+            }
+            RowDivider()
+
+            // One color for all Tasks and one for all Events (presets only; changes past and future ones).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_task),
+                title = "Task and Event colors",
+                subtitle = "All tasks share one color, and all events another (outlined in the calendars)."
+            )
+            ColorChoiceRow("Tasks", settings.taskColor) { key -> Repo.updateSettings { it.copy(taskColor = key) } }
+            ColorChoiceRow("Events", settings.eventColor) { key ->
+                Repo.updateSettings { it.copy(eventColor = key) }
+                Plans.resyncEvents(ctx)
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ---- Data management (TB2Cal's own data only) ----
+        SectionLabel("Data management")
+        Card(Modifier.fillMaxWidth()) {
+            Text(
+                "Only TB2Cal's own TimeBlocks, Tasks and Events. Events imported from your Gmail stay in your Google " +
+                    "account; They're never exported, imported or deleted here (your TimeBlock list, goals and " +
+                    "settings: Export/Import preferences, below).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
+            )
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_export),
+                title = "Export",
+                subtitle = "Choose the days and save them as a .t2c file.",
+                onClick = { openData(DataMode.EXPORT) },
+                trailing = { Chevron() }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_import),
+                title = "Import",
+                subtitle = "Open a .t2c file, check its days, then merge or overwrite.",
+                onClick = { runCatching { dataFilePicker.launch(arrayOf("*/*")) } },
+                trailing = { Chevron() }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_delete),
+                title = "Delete",
+                subtitle = "Choose the days to delete from TB2Cal.",
+                onClick = { openData(DataMode.DELETE) },
+                trailing = { Chevron() }
+            )
+        }
+
+        // ---- Export/Import preferences (.t2cp) ----
+        SectionLabel("Export/Import preferences")
+        Card(Modifier.fillMaxWidth()) {
+            Text(
+                "Your TimeBlock list (names, colors and countdowns), goals and settings, in one .t2cp file: For a " +
+                    "backup or a new phone. This phone's own ones stay as they are: The completion sound, Gmail import " +
+                    "(on/off, account, languages, hidden events) and Background reliability.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp)
+            )
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_export),
+                title = "Export preferences",
+                subtitle = "Save them as a .t2cp file.",
+                onClick = { runCatching { prefsSaver.launch(PrefsTransfer.fileName()) } },
+                trailing = { Chevron() }
+            )
+            RowDivider()
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_import),
+                title = "Import preferences",
+                subtitle = "Open a .t2cp file; It overwrites your current ones.",
+                onClick = { runCatching { prefsPicker.launch(arrayOf("*/*")) } },
+                trailing = { Chevron() }
+            )
+        }
+
+        // ---- Background ----
+        SectionLabel("Background")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_shield),
+                title = "Background reliability",
+                subtitle = "Keep Android's battery manager from stopping running TimeBlocks.",
+                onClick = onOpenReliability,
+                trailing = { Chevron() }
+            )
+        }
+
+        // ---- Calendar access (only when it's missing) ----
+        if (!hasCalPerm) {
+            SectionLabel("Calendar")
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                SettingRow(
+                    icon = rememberVectorPainter(Icons.Default.DateRange),
+                    title = "Calendar access",
+                    subtitle = "Needed to save completed TimeBlocks in your phone's calendar.",
+                    onClick = { calPerm.launch(CalendarWriter.PERMS) },
+                    trailing = { Button(onClick = { calPerm.launch(CalendarWriter.PERMS) }) { Text("Allow") } }
+                )
+            }
+        }
+
+        // ---- About ----
+        Spacer(Modifier.height(28.dp))
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            AppSymbol(32.dp)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (version.isNotEmpty()) "TB2Cal v$version" else "TB2Cal",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "TimeBlocks to Calendar",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "by github.com/pantelmg",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .clickable { uriHandler.openUri("https://github.com/pantelmg") }
+            )
+        }
+    }
+
+    prefsToImport?.let { b ->
+        AlertDialog(
+            onDismissRequest = { prefsToImport = null },
+            title = { Text("Import preferences?") },
+            text = {
+                Text(
+                    "Your TimeBlock list, goals and settings will be overwritten by the file's (saved " +
+                        "${java.time.LocalDate.ofEpochDay(b.madeOn).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yy"))}). " +
+                        "This can't be undone.\n\nYour records (TimeBlocks, Tasks and Events) aren't changed, and neither " +
+                        "are this phone's completion sound, Gmail import and Background reliability settings."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefsToImport = null
+                    val ok = runCatching { PrefsTransfer.import(ctx, b) }.isSuccess
+                    Toast.makeText(ctx, if (ok) "Preferences imported." else "Couldn't import the preferences.", Toast.LENGTH_SHORT).show()
+                }) { Text("Overwrite", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { prefsToImport = null }) { Text("Cancel") } }
+        )
+    }
+}
+
+/** Small primary label above a group of settings. */
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, top = 20.dp, bottom = 8.dp)
+    )
+}
+
+/** One setting: Round tonal icon, title and description, then a switch, button or arrow at the end. */
+@Composable
+private fun SettingRow(
+    icon: Painter,
+    title: String,
+    subtitle: String? = null,
+    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+            }
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            trailing()
+        }
+    }
+}
+
+@Composable
+private fun Chevron() {
+    Icon(
+        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun RowDivider() {
+    HorizontalDivider(
+        Modifier.padding(start = 72.dp, end = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+    )
+}
+
+@Composable
+private fun Hint(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 6.dp)
+    )
+}
+
+/** A radio (one choice) or checkbox (any number) row, tappable as a whole. */
+@Composable
+private fun ChoiceRow(text: String, selected: Boolean, radio: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (radio) RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(8.dp))
+        else Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(8.dp))
+        Text(text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** A row of the preset colors (no custom ones), for Tasks or Events. */
+@Composable
+private fun ColorChoiceRow(label: String, current: String, onPick: (String) -> Unit) {
+    Column(Modifier.padding(start = 72.dp, end = 16.dp, bottom = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            GoogleColors.all.forEach { gc ->
+                val c = Color(gc.argb)
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .border(if (gc.key == current) 3.dp else 2.dp, if (gc.key == current) MaterialTheme.colorScheme.onSurface else c, CircleShape)
+                        .clickable { onPick(gc.key) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.size(if (gc.key == current) 14.dp else 0.dp).clip(CircleShape).background(c))
+                }
+            }
+        }
+    }
+}
+
+/** A selectable pill (Remind me before): Filled when chosen. */
+@Composable
+private fun ChoicePill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        Modifier
+            .clip(shape)
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+            .border(1.dp, if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.outline, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+/** Remind me before → Enter: Any time before the start, in hours (up to 48) and minutes. */
+@Composable
+private fun RemindEnterDialog(current: Int, onSet: (Int) -> Unit, onDismiss: () -> Unit) {
+    var hours by remember { mutableStateOf(if (current > 0) (current / 60).toString() else "") }
+    var minutes by remember { mutableStateOf(if (current > 0) (current % 60).toString() else "") }
+    val h = hours.ifEmpty { "0" }.toIntOrNull()
+    val m = minutes.ifEmpty { "0" }.toIntOrNull()
+    val valid = h != null && m != null && h in 0..48 && m in 0..59
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remind me before") },
+        text = {
+            Column {
+                Text(
+                    "How long before the start of tasks and events with a time. 0h 0m: At the start.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = hours,
+                        onValueChange = { v -> hours = v.filter(Char::isDigit).take(2) },
+                        label = { Text("Hours") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = minutes,
+                        onValueChange = { v -> minutes = v.filter(Char::isDigit).take(2) },
+                        label = { Text("Minutes") },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (!valid) {
+                    Text(
+                        "Up to 48 hours and 59 minutes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                onSet((h ?: 0) * 60 + (m ?: 0))
+                onDismiss()
+            }) { Text("Set") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
