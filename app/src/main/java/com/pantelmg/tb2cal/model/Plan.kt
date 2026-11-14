@@ -48,8 +48,44 @@ data class Repeat(
         }
     }
 
-    /** "Every week on Sat", "Every 2 days", "Every month on the 14th · 5 times", "Every year · until 13/02/27". */
-    fun describe(): String = buildString {
+    /**
+     * The only day it happens, if it starts and ends on the same day (ends on its start date, or after 1 time, or
+     * the end comes before a second time), whatever "Every" is; Otherwise null.
+     */
+    fun onlyDay(): Long? {
+        val last = when {
+            count == 1 -> null
+            endDay != null -> endDay
+            else -> return null
+        }
+        var first: Long? = null
+        var d = startDay
+        val stop = last ?: (startDay + 366L * 4)
+        while (d <= stop) {
+            if (matches(d)) {
+                if (first == null) {
+                    first = d
+                    if (count == 1) return d
+                } else return null // A second day: Not only one.
+            }
+            d++
+        }
+        return first
+    }
+
+    /**
+     * "Every week on Sat", "Every 2 days", "Every month on the 14th · 5 times", "Every year · until 13/02/27"; When it
+     * happens on one day only: "Today only" or "02/11/26 only".
+     */
+    fun describe(): String {
+        onlyDay()?.let { d ->
+            return if (d == Plan.today()) "Today only"
+            else "${LocalDate.ofEpochDay(d).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH))} only"
+        }
+        return describeRule()
+    }
+
+    private fun describeRule(): String = buildString {
         append(if (step == 1) "Every ${unit.one}" else "Every $step ${unit.many}")
         when (unit) {
             RepeatUnit.WEEK -> append(" on ").append(

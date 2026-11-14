@@ -46,7 +46,8 @@ A side feature next to TimeBlocks, added with **+Task/Event** (Calendar tab, lef
 manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a calendar).
 - **Task:** Its name, and **Repeat…** (like Google: Every N days/weeks/months/years, weekdays, an optional time,
   start, and ends never / on a date / after N times; The end date starts as the start date, so On + that date means
-  only that day). Without a repeat it's a task with no date (like Google Tasks): It's listed, marked "No date", at the
+  only that day; Any repeat that starts and ends on the same day shows as **Today only**, or e.g. **02/11/26 only**
+  once that day has passed). Without a repeat it's a task with no date (like Google Tasks): It's listed, marked "No date", at the
   top of the day lists (app and widget) from the day it was added onward until ticked or deleted, and isn't in the
   calendars until then; Once ticked it shows, crossed out, on the day it was done.
   Repeating tasks show on their days, crossed out once ticked.

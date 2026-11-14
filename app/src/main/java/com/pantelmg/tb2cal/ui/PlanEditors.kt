@@ -435,8 +435,11 @@ fun EventEditor(initial: PlanItem?, defaultDay: Long, onSave: (PlanItem) -> Unit
 @Composable
 private fun LabeledField(label: String, value: String, error: Boolean = false, onClick: () -> Unit) {
     Column {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(4.dp))
+        // No label (e.g. Ends → On): No space above, so the box lines up with the text next to it.
+        if (label.isNotEmpty()) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+        }
         Surface(
             shape = RoundedCornerShape(8.dp),
             border = BorderStroke(1.dp, if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline),
