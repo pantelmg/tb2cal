@@ -2,10 +2,10 @@
 
 By [github.com/pantelmg](https://github.com/pantelmg)
 
-Create TimeBlocks (and Tasks/Events), with your own conditions, to track and improve productivity. Completed TimeBlocks
-are registered in the app and the local Calendar. Use the app's widgets (Calendar, TimeBlock manager and Task/Event
-manager) for efficiency. Bonus: Import events from your Google account, export TimeBlock statistics for a given time
-period to PDF, set Goals, and export, import or delete TB2Cal's data by date range.
+Create TimeBlocks (and Tasks/Events) to track and improve productivity. Completed TimeBlocks are registered in-app.
+Use the app's widgets (Calendar, TimeBlock manager and Task/Event manager) for efficiency. Bonus: Import events from your Google account, export TimeBlock statistics for a given time
+period to PDF, set Goals, export, import or delete TB2Cal's data by date range, and export or import your
+preferences.
 
 ## TimeBlocks tab
 - **Your list:** `study` and `workout` to start with. Add, rename and remove TimeBlocks, each with a color: 11 presets
@@ -43,7 +43,7 @@ period to PDF, set Goals, and export, import or delete TB2Cal's data by date ran
 
 ## Tasks and Events
 A side feature next to TimeBlocks, added with **+Task/Event** (Calendar tab, left of TB Total) or the Task/Event
-manager widget's **+**, which ask: Add Task or Add Event.
+manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a calendar).
 - **Task:** Its name, and **Repeat…** (like Google: Every N days/weeks/months/years, weekdays, an optional time,
   start, and ends never / on a date / after N times). Without a repeat it's a one-time task with no date: It waits on
   the widget (and at the top of today's list) until ticked, then shows, crossed out, on the day it was done.
@@ -51,15 +51,19 @@ manager widget's **+**, which ask: Add Task or Add Event.
 - **Event:** Its name, date, all day or from–to times, and Repeat…. It counts as completed once its time is over.
   Events are also saved in TB2Cal's phone calendar.
 - **In the calendars:** Outlined (transparent) entries, in one color for all tasks and one for all events (Settings).
-- **Day list:** Tasks have a circle to tick (or untick); Tap an entry to edit it, the bin deletes it. For repeating
+- **Day list:** Tasks have an outlined square to tick (or untick), Events a solid square of the same size (also in
+  Statistics and the widget); Tap an entry to edit it, the bin deletes it. For repeating
   ones both ask: This day only, or All repeats.
-- **Reminders:** A notification at the time of timed tasks (with Done) and events.
+- **Reminders:** A notification for timed tasks (with Done) and events: At their start (default), or 5, 10, 15 or 30
+  minutes before (Settings → Remind me before). A reminder whose time has already passed isn't given.
 ### Calendar preferences (Settings)
 - **In-app Calendar: TimeBlocks/day:** 3 (default), 4 or 5. The widget's capacity grows with its size instead.
 - **Gmail account:** Which account's events are shown; The one with the most events is first and picked by default.
 - **Gmail import: Languages:** Calendars that publish the same events in several languages (like Google's holidays
   in Greek and in English) can be picked one by one, or none. Your other events are always shown.
 - **Gmail events on the Task/Event widget** (off by default): Today's Gmail events also in the widget's Events list.
+- **Completed on the Task/Event widget:** Crossed out (default) or Removed.
+- **Remind me before:** Start (default), 5m, 10m, 15m or 30m before timed tasks and events.
 - **Visible to other calendar apps** (on by default): Completed TimeBlocks and Events also show in the phone's other
   calendar apps; Off hides TB2Cal's phone calendar there (and the completion screen's Open in another calendar app).
 - **Task and Event colors:** One preset color for all tasks and one for all events; Changing it recolors past and
@@ -102,23 +106,39 @@ never exported, imported or deleted here.
   twice) or **Overwrite** (deletes TB2Cal's data there first).
 - **Delete:** **Delete Preview**, the same screen; Asks before deleting, and can't be undone. Repeating tasks and
   events lose only their days in the chosen range.
+- **All time** (the box after the dates): Everything at once, whole: Never-ending repeats stay never-ending, every day
+  is highlighted, and the dates show the first and last day with data. The file: `TB2Cal Data All time 14 Nov
+  2026.t2c` (the export day). An All time file opens in Import Preview with All time chosen. Tapping a day or a date
+  goes back to a range; Turning All time off brings back the range chosen before.
+- Merging never adds the same TimeBlock twice (same name and start); Different same-name TimeBlocks of a day are
+  kept, and add up with TB Total and in Statistics.
 - Open tasks without a date count as the day of the export (or today, for Delete).
+
+## Export/Import preferences (Settings)
+Your TimeBlock list (names, colors and countdowns), goals and settings, in one `.t2cp` file, for a backup or a new
+phone: `TB2Cal Preferences 14 Nov 2026.t2cp`. **Import** asks first, since it overwrites them; Your records (TimeBlocks,
+Tasks, Events) aren't changed. This phone's own settings are never in the file and stay as they are: The completion
+sound, Gmail import (on/off, account, languages, hidden events) and Background reliability.
 
 Every tab fits on one page; Only the Calendar day list and the Statistics and Goals lists scroll, when they're too
 long.
 
 ## Widgets
-- **TimeBlock manager (4×1):** ⏳/⏱ (hourglass for Timer, stopwatch for Stopwatch; tap to switch), the TimeBlock
-  (tap to cycle through your list), then Start, Pause and Stop, always in the same place. In Stopwatch mode a boxed ✓
-  (Complete) appears left of Start. Buttons that can't be used do nothing.
-- **Task/Event manager (4×2 or larger, 4×3 to start):** **Tasks/Events ▾** (tap to switch to Tasks or Events;
-  remembered) with its icon (a target with an arrow for Tasks, a wine glass for Events, both split by a line for
-  Tasks/Events), then **‹ Today ›** (always in the same place; ‹ › show other days as DD/MM, back to Today at
-  midnight) and **+** (the same circle as the TimeBlock manager's). Below: Open tasks without a date (on Today) and
-  the day's tasks, each with a circle to tick off; The day's events (past ones crossed out).
+In the widget picker: Calendar, TimeBlock manager, Task/Event manager.
 - **Calendar (4×4 or larger):** The same month view as the Calendar tab. ‹ › change month, tap the month name for
   the current month, the TB icon opens TB2Cal, tap a day to open it in the app. Each day shows up to 3 entries at
   4 rows, 4 at 5 rows and 5 at 6 rows or taller, with +N next to the day number when there are more. Follows TB Total.
+- **TimeBlock manager (4×1):** ⏳/⏱ in a circle (hourglass for Timer, stopwatch for Stopwatch; tap to switch), the
+  TimeBlock (tap to cycle through your list), then Start, Pause and Stop, always in the same place. In Stopwatch mode
+  ✓ (Complete), in a circle of the same size, appears left of Start. Buttons that can't be used do nothing.
+- **Task/Event manager (4×2 or larger, 4×3 to start):** **Tasks/Events ▾** (tap to switch to Tasks or Events;
+  remembered) with its icon (white versions of the Add icons: A ticked square for Tasks, a calendar for Events; For
+  Tasks/Events a closed square split corner to corner, a small tick above-left and a small calendar below-right),
+  then **‹ Today ›** (always in the same place; ‹ › show other days as DD/MM, back to Today at midnight) and **+** (in
+  a rounded square). Below: Open tasks without a date (on Today) and the day's tasks, each with an outlined square to
+  tick (or untick); The day's events, with a solid square.
+  **Completed on the Task/Event widget** (Settings): Ticked tasks and past events stay **Crossed out** until the day
+  ends (default), or are **Removed** from the list. The widget redraws by itself when an event ends and at midnight.
 
 ## Staying alive when Android stops apps
 - Foreground service with a permanent notification; An exact alarm-clock alarm for the timer end; A heartbeat alarm
