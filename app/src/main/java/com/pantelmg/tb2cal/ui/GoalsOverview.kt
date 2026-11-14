@@ -70,9 +70,15 @@ internal fun goalPeriodText(period: String, startDay: Long): String {
     }
 }
 
-/** A goal's periods: "2–8 Nov 26", "From 2–8 Nov 26 on", "2–8 Nov 26 to 16–22 Nov 26". */
-private fun spanText(s: GoalSpan): String {
-    val until = s.untilStart ?: return "From ${goalPeriodText(s.period, s.fromStart)} on"
+/**
+ * A goal's periods, with its exceptions: "2–8 Nov 26", "From Nov 26 onward, except Jan 27",
+ * "2–8 Nov 26 to 16–22 Nov 26, except 9–15 Nov 26".
+ */
+private fun spanText(s: GoalSpan): String = rangeText(s) +
+    if (s.except.isEmpty()) "" else ", except " + s.except.joinToString(", ") { goalPeriodText(s.period, it) }
+
+private fun rangeText(s: GoalSpan): String {
+    val until = s.untilStart ?: return "From ${goalPeriodText(s.period, s.fromStart)} onward"
     if (until == Goal.nextStart(s.period, s.fromStart)) return goalPeriodText(s.period, s.fromStart)
     val u = LocalDate.ofEpochDay(until)
     val last = when (s.period) {
@@ -168,14 +174,7 @@ fun GoalsOverview(onDismiss: () -> Unit) {
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
-                                                // Periods inside it that have their own goal (listed on their own rows).
-                                                if (s.except.isNotEmpty()) {
-                                                    Text(
-                                                        "except " + s.except.joinToString(", ") { goalPeriodText(s.period, it) },
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
+
                                             }
                                             if (Goal.canDelete(s, allowPast, today)) {
                                                 IconButton(onClick = { toDelete = s }) {
@@ -204,9 +203,7 @@ fun GoalsOverview(onDismiss: () -> Unit) {
                 title = { Text("Delete this goal?") },
                 text = {
                     Text(
-                        "${Fmt.duration(s.minutes * 60_000L)} · ${spanText(s)}" +
-                            (if (s.except.isNotEmpty()) "\nexcept " + s.except.joinToString(", ") { goalPeriodText(s.period, it) } else "") +
-                            "\n\n" +
+                        "${Fmt.duration(s.minutes * 60_000L)} · ${spanText(s)}\n\n" +
                             when {
                                 endsNow -> "It ends from the current period on; Earlier periods keep it as it was. Goals " +
                                     "set for single periods stay."

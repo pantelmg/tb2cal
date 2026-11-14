@@ -111,9 +111,9 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **N goals set in this time period:** The TimeBlocks with a goal of the period type shown.
 - **Apply onward ON/OFF** (one per period type, ON by default, remembered; When ON: Applied on retap to save): ON, a goal you
   save repeats in every later period of that type; OFF, it's only for the period shown.
-- **Active goals** (overview, top right): Every goal per TimeBlock, by range (Daily, Weekly, Monthly, Yearly), each with
-  the periods it covers (e.g. `2–8 Nov 26`, `From 2–8 Nov 26 on`, `2–8 Nov 26 to 16–22 Nov 26`); An Apply onward goal also
-  lists the periods that have their own single-period goal instead (`except 16–22 Nov 26`). The bin deletes a goal:
+- **Active goals overview** (the box next to the description): Every goal per TimeBlock, by range (Daily, Weekly, Monthly, Yearly), each with
+  the periods it covers (e.g. `2–8 Nov 26`, `From Nov 26 onward, except Jan 27`, `2–8 Nov 26 to 16–22 Nov 26`); "except"
+  lists the periods inside an Apply onward goal that have their own single-period goal instead. The bin deletes a goal:
   With Allow previous day editing OFF, only goals that haven't ended (a running one ends from now; Its past periods keep
   it); ON, any goal.
 - Ended periods are read-only (no Tap to set) unless Allow previous day editing is ON; Goals saved after their period

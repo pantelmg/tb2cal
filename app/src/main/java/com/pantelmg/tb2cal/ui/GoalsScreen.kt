@@ -122,27 +122,29 @@ fun GoalsScreen() {
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Title, and the Active goals overview (same style as Statistics' Export PDF).
+        Text("Goals", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        // Description, then the Active goals overview box (like Statistics' Export PDF): The description wraps next to it.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Goals", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(
+                "Set a time goal for each TimeBlock and monitor progress.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
             val boxShape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
             Column(
                 Modifier
                     .clip(boxShape)
                     .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
                     .clickable { overview = true }
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("Active goals", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                Text("overview", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text("overview", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
-        Text(
-            "Set a time goal for each TimeBlock and monitor progress.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         Spacer(Modifier.height(8.dp))
 
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
