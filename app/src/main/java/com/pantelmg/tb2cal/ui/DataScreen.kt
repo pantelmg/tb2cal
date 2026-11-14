@@ -117,6 +117,7 @@ fun DataScreen(onBack: () -> Unit) {
     val locale = Locale.getDefault()
     val today = LocalDate.now()
     val todayDay = today.toEpochDay()
+    val df = remember { DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH) }
 
     // The range: First tap sets the first day, the second the last one (swapped if earlier), a third starts over.
     // Export: This month to start with; Import: The file's days; Delete: Nothing until chosen.
@@ -389,7 +390,6 @@ fun DataScreen(onBack: () -> Unit) {
         }
 
         // ---- Between DD/MM/YY and DD/MM/YY ----
-        val df = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH)
         Row(
             Modifier.fillMaxWidth().padding(top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
