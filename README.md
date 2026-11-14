@@ -72,12 +72,13 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
   (with Import from your Gmail on).
 - **Completed on the Task/Event widget:** Crossed out (default) or Removed.
 - **Allow previous day editing** (OFF by default), for honest records:
-  - **OFF:** Past days are read-only: Their TimeBlocks can't be removed (Calendar tab, Statistics), and their Tasks/Events
-    can't be added, ticked, changed or removed (app and widget). New items start from today (a past day's + adds them
+  - **OFF:** Past days are read-only: Their TimeBlocks can't be removed (Calendar tab, Statistics), their Tasks/Events
+    can't be added, ticked, changed or removed (app and widget), and goals of ended periods can't be set or deleted. New items start from today (a past day's + adds them
     on today). Changing or deleting a repeat that has earlier days offers **This and following** instead of All
     repeats: Its earlier days stay as they were.
   - **ON:** All of it is allowed, and it shows: **Added in retrospect** on days before an item was added, **Ticked
-    later** / **Unticked later** on tasks ticked or unticked after their day (day list, widget, Statistics and its PDF).
+    later** / **Unticked later** on tasks ticked or unticked after their day (day list, widget, Statistics and its PDF),
+    **Set later** on goals saved after their period ended.
   - Data management (Export/Import/Delete) works either way, as an explicit, confirmed action.
 - **Remind me before:** A scrollable bar (Start, the default, then 5m up to 24h) with **Enter** fixed on the right, for
   any time up to 48h59m before timed tasks and events.
@@ -110,6 +111,15 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **N goals set in this time period:** The TimeBlocks with a goal of the period type shown.
 - **Apply onward ON/OFF** (one per period type, ON by default, remembered; When ON: Applied on retap to save): ON, a goal you
   save repeats in every later period of that type; OFF, it's only for the period shown.
+- **Active goals** (overview, top right): Every goal per TimeBlock, by range (Daily, Weekly, Monthly, Yearly), each with
+  the periods it covers (e.g. `2–8 Nov 26`, `From 2–8 Nov 26 on`, `2–8 Nov 26 to 16–22 Nov 26`); An Apply onward goal also
+  lists the periods that have their own single-period goal instead (`except 16–22 Nov 26`). The bin deletes a goal:
+  With Allow previous day editing OFF, only goals that haven't ended (a running one ends from now; Its past periods keep
+  it); ON, any goal.
+- Ended periods are read-only (no Tap to set) unless Allow previous day editing is ON; Goals saved after their period
+  ended show **Set later**.
+- Removing a TimeBlock that has goals (Edit TimeBlocks) asks first: Its goals go too; With the setting OFF, those of
+  past periods stay as a record. Without goals it's removed at once.
 
 ## Data management (Settings)
 Only TB2Cal's own TimeBlocks, Tasks and Events. Events imported from your Gmail stay in your Google account; They're

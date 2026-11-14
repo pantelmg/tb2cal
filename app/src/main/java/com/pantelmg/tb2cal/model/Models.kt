@@ -251,8 +251,9 @@ data class Settings(
     /** Task/Event reminders: Minutes before the start (0: At the start). */
     val remindBefore: Int = 0,
     /**
-     * Previous day editing: Removing past TimeBlocks, and adding, ticking, changing or removing Tasks/Events on past
-     * days (shown "Added in retrospect", "Ticked later" / "Unticked later"); OFF: Only today and later.
+     * Previous day editing: Removing past TimeBlocks, adding/ticking/changing/removing Tasks/Events on past days,
+     * setting or deleting goals of ended periods (shown "Added in retrospect", "Ticked later" / "Unticked later",
+     * "Set later"); OFF: Only today, current periods and later.
      */
     val allowPast: Boolean = false,
     /** Statistics: "TB" (TimeBlocks) or "TE" (Tasks/Events); In Tasks/Events: "TASKS", "EVENTS" or "BOTH". */
@@ -373,30 +374,156 @@ object Fmt {
  * set in the period that starts on [startDay] (epoch day). [onward]: Also applies to every later period of that
  * type, until another onward goal is set. [minutes] 0 = no goal.
  */
-data class Goal(val period: String, val nameKey: String, val startDay: Long, val minutes: Int, val onward: Boolean) {
+data class Goal(
+    val period: String, val nameKey: String, val startDay: Long, val minutes: Int, val onward: Boolean,
+    /** When it was saved (wall time; 0: Unknown, from before this was kept). For "Set later". */
+    val setAt: Long = 0,
+) {
     fun toJson(): JSONObject = JSONObject()
-        .put("p", period).put("n", nameKey).put("s", startDay).put("m", minutes).put("o", onward)
+        .put("p", period).put("n", nameKey).put("s", startDay).put("m", minutes).put("o", onward).put("at", setAt)
 
     companion object {
         fun fromJson(o: JSONObject) = Goal(
-            o.getString("p"), o.getString("n"), o.getLong("s"), o.getInt("m"), o.optBoolean("o")
+            o.getString("p"), o.getString("n"), o.getLong("s"), o.getInt("m"), o.optBoolean("o"), o.optLong("at", 0L)
         )
 
-        /** Goal minutes for a name in the period starting on [startDay]: Its own one-off goal, else the latest onward one. */
-        fun resolve(list: List<Goal>, period: String, nameKey: String, startDay: Long): Int {
+        /** The goal entry that applies to the period starting on [startDay]: Its own one-off goal, else the latest onward one. */
+        fun resolveEntry(list: List<Goal>, period: String, nameKey: String, startDay: Long): Goal? {
             val mine = list.filter { it.period == period && it.nameKey == nameKey }
-            mine.firstOrNull { !it.onward && it.startDay == startDay }?.let { return it.minutes }
-            return mine.filter { it.onward && it.startDay <= startDay }.maxByOrNull { it.startDay }?.minutes ?: 0
+            mine.firstOrNull { !it.onward && it.startDay == startDay }?.let { return it }
+            return mine.filter { it.onward && it.startDay <= startDay }.maxByOrNull { it.startDay }
         }
+
+        /** Goal minutes for a name in the period starting on [startDay]: Its own one-off goal, else the latest onward one. */
+        fun resolve(list: List<Goal>, period: String, nameKey: String, startDay: Long): Int =
+            resolveEntry(list, period, nameKey, startDay)?.minutes ?: 0
+
+        /**
+         * Saved after the period [startDay]–[endDay] (exclusive) had ended (Settings: Allow previous day editing):
+         * Shown "Set later".
+         */
+        fun setLater(g: Goal?, endDay: Long): Boolean =
+            g != null && g.minutes > 0 && g.setAt > 0 &&
+                java.time.Instant.ofEpochMilli(g.setAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay() >= endDay
 
         /**
          * Sets a goal. One-off: Only for that period. Onward: From that period on, replacing onward goals set for
          * later periods (one-off goals of later periods stay).
          */
-        fun set(list: List<Goal>, period: String, nameKey: String, startDay: Long, minutes: Int, onward: Boolean): List<Goal> =
+        fun set(
+            list: List<Goal>, period: String, nameKey: String, startDay: Long, minutes: Int, onward: Boolean,
+            at: Long = System.currentTimeMillis(),
+        ): List<Goal> =
             list.filterNot {
                 it.period == period && it.nameKey == nameKey &&
                     ((!it.onward && it.startDay == startDay) || (onward && it.onward && it.startDay >= startDay))
-            } + Goal(period, nameKey, startDay, minutes, onward)
+            } + Goal(period, nameKey, startDay, minutes, onward, at)
+
+        /** The start of the period after the one starting on [day]. */
+        fun nextStart(period: String, day: Long): Long {
+            val d = java.time.LocalDate.ofEpochDay(day)
+            return when (period) {
+                "DAILY" -> d.plusDays(1)
+                "WEEKLY" -> d.plusWeeks(1)
+                "MONTHLY" -> d.plusMonths(1)
+                else -> d.plusYears(1)
+            }.toEpochDay()
+        }
+
+        /**
+         * Every goal as listed in the Active goals overview: Its amount over a run of periods. One-off: Its period.
+         * Onward: From its period until the next onward goal of that name and type (or open-ended). Entries of 0
+         * (removed goals) aren't listed.
+         */
+        fun spans(list: List<Goal>): List<GoalSpan> {
+            val out = mutableListOf<GoalSpan>()
+            list.groupBy { it.period to it.nameKey }.forEach { (pk, gs) ->
+                val (period, key) = pk
+                val onw = gs.filter { it.onward }.sortedBy { it.startDay }
+                val oneOffs = gs.filter { !it.onward }
+                onw.forEachIndexed { i, g ->
+                    if (g.minutes > 0) {
+                        val until = onw.getOrNull(i + 1)?.startDay
+                        // Periods inside it that have their own one-off goal (or none): Its exceptions.
+                        val except = oneOffs.map { it.startDay }
+                            .filter { it >= g.startDay && (until == null || it < until) }.sorted()
+                        out += GoalSpan(period, key, g.minutes, g.startDay, until, true, except)
+                    }
+                }
+                gs.filter { !it.onward && it.minutes > 0 }.forEach { g ->
+                    out += GoalSpan(period, key, g.minutes, g.startDay, nextStart(period, g.startDay), false)
+                }
+            }
+            return out
+        }
+
+        /** Ended before [today]: Its last period is over. */
+        fun isPast(s: GoalSpan, today: Long): Boolean = s.untilStart != null && s.untilStart <= today
+
+        /** With previous day editing OFF, only goals that haven't ended can be deleted; With it ON, any. */
+        fun canDelete(s: GoalSpan, allowPast: Boolean, today: Long): Boolean = allowPast || !isPast(s, today)
+
+        /**
+         * Deletes a goal. With previous day editing OFF, an onward goal that began before the current period
+         * ([currentStart]) ends there instead (its past periods keep it). Removed onward goals leave a 0 entry, so
+         * the goal before them doesn't stretch over their periods.
+         */
+        fun delete(list: List<Goal>, s: GoalSpan, allowPast: Boolean, currentStart: Long, at: Long = System.currentTimeMillis()): List<Goal> {
+            val mine = { g: Goal -> g.period == s.period && g.nameKey == s.nameKey }
+            val out = if (!s.onward) {
+                list.filterNot { mine(it) && !it.onward && it.startDay == s.fromStart }
+            } else if (allowPast || s.fromStart >= currentStart) {
+                list.map { if (mine(it) && it.onward && it.startDay == s.fromStart) it.copy(minutes = 0, setAt = at) else it }
+            } else {
+                list.filterNot { mine(it) && it.onward && it.startDay == currentStart } +
+                    Goal(s.period, s.nameKey, currentStart, 0, true, at)
+            }
+            return prune(out)
+        }
+
+        /**
+         * A TimeBlock taken off the list: With previous day editing ON, all its goals go; OFF, those that haven't
+         * ended (running ones end now) and past ones stay as a record. [currentStart]: Each type's current period.
+         */
+        fun deleteName(list: List<Goal>, key: String, allowPast: Boolean, today: Long, currentStart: (String) -> Long): List<Goal> {
+            if (allowPast) return list.filterNot { it.nameKey == key }
+            var out = list
+            spans(list).filter { it.nameKey == key && !isPast(it, today) }
+                .sortedByDescending { it.fromStart }
+                .forEach { sp -> out = delete(out, sp, false, currentStart(sp.period)) }
+            // Its "no goal this period" entries from the current periods on go too.
+            return prune(out.filterNot { it.nameKey == key && !it.onward && it.minutes == 0 && it.startDay >= currentStart(it.period) })
+        }
+
+        /** Whether a name has any goal listed. */
+        fun hasGoals(list: List<Goal>, key: String): Boolean = spans(list).any { it.nameKey == key }
+
+        /**
+         * Drops entries that change nothing: Onward 0 entries with no goal before them to end, and one-off 0 entries
+         * ("no goal this period") in periods no onward goal covers.
+         */
+        private fun prune(list: List<Goal>): List<Goal> {
+            val drop = mutableSetOf<Goal>()
+            list.filter { it.onward }.groupBy { it.period to it.nameKey }.values.forEach { gs ->
+                var prevHasGoal = false
+                gs.sortedBy { it.startDay }.forEach { g ->
+                    if (g.minutes == 0 && !prevHasGoal) drop += g
+                    else prevHasGoal = g.minutes > 0
+                }
+            }
+            val kept = list.filterNot { it in drop }
+            return kept.filterNot { g ->
+                !g.onward && g.minutes == 0 &&
+                    kept.filter { it.onward && it.period == g.period && it.nameKey == g.nameKey && it.startDay <= g.startDay }
+                        .maxByOrNull { it.startDay }?.minutes.let { it == null || it == 0 }
+            }
+        }
     }
 }
+
+/** A goal over a run of periods (Active goals overview). [untilStart]: The start of the first period after it; null: Open-ended. */
+data class GoalSpan(
+    val period: String, val nameKey: String, val minutes: Int, val fromStart: Long, val untilStart: Long?, val onward: Boolean,
+    /** Onward goals: Periods inside it that have their own one-off goal (or no goal) instead ("except …"). */
+    val except: List<Long> = emptyList(),
+)

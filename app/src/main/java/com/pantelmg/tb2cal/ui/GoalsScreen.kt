@@ -1,5 +1,11 @@
 package com.pantelmg.tb2cal.ui
 
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.foundation.clickable
+
+import androidx.compose.foundation.border
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
@@ -59,7 +65,11 @@ import com.pantelmg.tb2cal.model.Goal
 import com.pantelmg.tb2cal.model.GoogleColors
 
 /** One TimeBlock name on the Goals tab. */
-private data class GoalRow(val key: String, val name: String, val colorKey: String?, val doneMs: Long, val goalMin: Int)
+private data class GoalRow(
+    val key: String, val name: String, val colorKey: String?, val doneMs: Long, val goalMin: Int,
+    /** Its goal was saved after the period had ended (Settings: Allow previous day editing). */
+    val setLater: Boolean = false,
+)
 
 /**
  * Goals tab: Laid out like Statistics (period, ‹ title ›, card, list). Every TimeBlock name of your list gets a
@@ -86,9 +96,16 @@ fun GoalsScreen() {
         val done = summarize(history, start, end).associateBy { it.key }
         blocks.distinctBy { it.name.trim().lowercase() }.map { b ->
             val key = b.name.trim().lowercase()
-            GoalRow(key, b.name.trim(), b.colorKey, done[key]?.totalMs ?: 0L, Goal.resolve(goals, period.name, key, startDay))
+            val entry = Goal.resolveEntry(goals, period.name, key, startDay)
+            GoalRow(
+                key, b.name.trim(), b.colorKey, done[key]?.totalMs ?: 0L, entry?.minutes ?: 0,
+                setLater = Goal.setLater(entry, end.toEpochDay()),
+            )
         }
     }
+    // A period that has ended is a record: Its goals can be set only with previous day editing on (Settings).
+    val locked = !settings.allowPast && end.toEpochDay() <= java.time.LocalDate.now().toEpochDay()
+    var overview by rememberSaveable { mutableStateOf(false) }
     // Names with a goal of this period type, in the period shown.
     val goalCount = rows.count { it.goalMin > 0 }
 
@@ -105,7 +122,22 @@ fun GoalsScreen() {
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text("Goals", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        // Title, and the Active goals overview (same style as Statistics' Export PDF).
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Goals", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            val boxShape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+            Column(
+                Modifier
+                    .clip(boxShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
+                    .clickable { overview = true }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Active goals", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text("overview", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+        }
         Text(
             "Set a time goal for each TimeBlock and monitor progress.",
             style = MaterialTheme.typography.bodySmall,
@@ -210,6 +242,10 @@ fun GoalsScreen() {
                                             color = if (pct >= 100) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        if (r.setLater) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("· Set later", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                     }
                                 }
                                 Text(
@@ -219,14 +255,17 @@ fun GoalsScreen() {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(onClick = {
-                                if (open) save(r.key)
-                                else {
-                                    editing = r.key
-                                    hours = (r.goalMin / 60).toString()
-                                    minutes = (r.goalMin % 60).toString()
-                                }
-                            }) { Text(if (open) "Retap to save" else "Tap to set") }
+                            // Ended periods: Read-only unless previous day editing is on.
+                            if (!locked) {
+                                TextButton(onClick = {
+                                    if (open) save(r.key)
+                                    else {
+                                        editing = r.key
+                                        hours = (r.goalMin / 60).toString()
+                                        minutes = (r.goalMin % 60).toString()
+                                    }
+                                }) { Text(if (open) "Retap to save" else "Tap to set") }
+                            }
                         }
                         if (open) {
                             Row(
@@ -267,4 +306,6 @@ fun GoalsScreen() {
             }
         }
     }
+
+    if (overview) GoalsOverview(onDismiss = { overview = false })
 }

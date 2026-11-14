@@ -1,5 +1,7 @@
 package com.pantelmg.tb2cal.ui
 
+import androidx.compose.runtime.collectAsState
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,8 +45,15 @@ import java.util.UUID
 fun EditBlocksScreen(onBack: () -> Unit) {
     val rows = remember { Repo.blocks.value.toMutableStateList() }
     var colorFor by remember { mutableStateOf<String?>(null) }
+    // Removing a TimeBlock that has goals asks first (its goals go too; Past ones stay unless previous day editing is on).
+    var confirmRemove by remember { mutableStateOf<BlockType?>(null) }
 
     fun persist() = Repo.setBlocks(rows.toList())
+    fun keyOf(b: BlockType) = b.name.trim().lowercase()
+    fun remove(b: BlockType) {
+        rows.removeAll { it.id == b.id }
+        persist()
+    }
 
     fun update(id: String, f: (BlockType) -> BlockType) {
         val i = rows.indexOfFirst { it.id == id }
@@ -113,14 +122,44 @@ fun EditBlocksScreen(onBack: () -> Unit) {
                     )
                     IconButton(
                         onClick = {
-                            rows.removeAll { it.id == b.id }
-                            persist()
+                            // Goals belong to the name: Only if no other TimeBlock in the list has the same name.
+                            val key = keyOf(b)
+                            val shared = rows.any { it.id != b.id && keyOf(it) == key }
+                            if (!shared && key.isNotEmpty() && com.pantelmg.tb2cal.model.Goal.hasGoals(Repo.goals.value, key)) confirmRemove = b
+                            else remove(b)
                         },
                         enabled = rows.size > 1
                     ) { Icon(Icons.Default.Delete, contentDescription = "Remove ${b.name}") }
                 }
             }
         }
+    }
+
+    confirmRemove?.let { b ->
+        val allowPast = Repo.settings.collectAsState().value.allowPast
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmRemove = null },
+            title = { Text("Remove ${b.name.trim()}?") },
+            text = {
+                Text(
+                    if (allowPast) "It has goals: All of them will be deleted too (Allow previous day editing is ON)."
+                    else "It has goals: Those from the current periods on will be deleted too; Goals of past periods " +
+                        "stay as a record (Allow previous day editing is OFF)."
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    Repo.setGoals(
+                        com.pantelmg.tb2cal.model.Goal.deleteName(
+                            Repo.goals.value, keyOf(b), allowPast, com.pantelmg.tb2cal.model.Plan.today()
+                        ) { currentPeriodStart(it) }
+                    )
+                    remove(b)
+                    confirmRemove = null
+                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmRemove = null }) { Text("Cancel") } }
+        )
     }
 
     colorFor?.let { id ->

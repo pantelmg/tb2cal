@@ -539,9 +539,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             SettingRow(
                 icon = rememberVectorPainter(Icons.Default.DateRange),
                 title = "Allow previous day editing",
-                subtitle = "Removing past TimeBlocks, and adding, ticking, changing or removing Tasks/Events on past " +
-                    "days. OFF: Only today and later. ON: Allowed, and they show \"Added in retrospect\" or " +
-                    "\"Ticked later\" / \"Unticked later\" in the app and Statistics.",
+                subtitle = "Removing past TimeBlocks; Adding, ticking, changing or removing Tasks/Events on past days; " +
+                    "Setting or deleting goals of ended periods. OFF: Only today, current periods and later. ON: " +
+                    "Allowed, and they show \"Added in retrospect\", \"Ticked later\" / \"Unticked later\" or " +
+                    "\"Set later\" in the app and Statistics.",
                 onClick = { Repo.updateSettings { it.copy(allowPast = !it.allowPast) } },
                 trailing = {
                     Switch(checked = settings.allowPast, onCheckedChange = { v -> Repo.updateSettings { it.copy(allowPast = v) } })
