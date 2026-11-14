@@ -70,6 +70,14 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **Gmail events on the Task/Event widget** (on by default): The day's Gmail events also in the widget's Events list
   (with Import from your Gmail on).
 - **Completed on the Task/Event widget:** Crossed out (default) or Removed.
+- **Allow previous day editing** (OFF by default), for honest records:
+  - **OFF:** Past days are read-only: Their TimeBlocks can't be removed (Calendar tab, Statistics), and their Tasks/Events
+    can't be added, ticked, changed or removed (app and widget). New items start from today (a past day's + adds them
+    on today). Changing or deleting a repeat that has earlier days offers **This and following** instead of All
+    repeats: Its earlier days stay as they were.
+  - **ON:** All of it is allowed, and it shows: **Added in retrospect** on days before an item was added, **Ticked
+    later** / **Unticked later** on tasks ticked or unticked after their day (day list, widget, Statistics and its PDF).
+  - Data management (Export/Import/Delete) works either way, as an explicit, confirmed action.
 - **Remind me before:** A scrollable bar (Start, the default, then 5m up to 24h) with **Enter** fixed on the right, for
   any time up to 48h59m before timed tasks and events.
 - **Visible to other calendar apps** (on by default): Completed TimeBlocks and Events also show in the phone's other

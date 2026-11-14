@@ -402,7 +402,9 @@ fun CalendarScreen() {
                     }
                     // TimeBlocks can be deleted; Gmail events are read-only, but can be hidden (Settings).
                     if (item.isTimeBlock) {
-                        IconButton(onClick = { toDelete = item }) {
+                        // A past day's TimeBlocks can be removed only with previous day editing on (Settings).
+                        if (!settings.allowPast && day.toEpochDay() < today.toEpochDay()) Spacer(Modifier.size(48.dp))
+                        else IconButton(onClick = { toDelete = item }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete ${item.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else if (settings.allowHide && item.eventId != null) {
@@ -500,13 +502,18 @@ fun CalendarScreen() {
 private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: PlanUi) {
     val ctx = LocalContext.current
     val c = Color(color)
+    // A past day's entry (also a task without a date ticked on a past day) is read-only unless previous day editing
+    // is on (Settings).
+    val allowPast = Repo.settings.collectAsState().value.allowPast
+    val recordDay = day ?: (if (item.undated && done) item.doneAt?.let { Plan.dayOf(it) } else null)
+    val locked = !allowPast && recordDay != null && recordDay < Plan.today()
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         // Same-size squares: Tasks outlined (tap to tick or untick), Events solid.
         Box(
             Modifier
                 .size(32.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .then(if (item.kind == ItemKind.TASK) Modifier.clickable { Plans.setDone(ctx, item, day, !done) } else Modifier),
+                .then(if (item.kind == ItemKind.TASK && !locked) Modifier.clickable { Plans.setDone(ctx, item, day, !done) } else Modifier),
             contentAlignment = Alignment.Center
         ) { PlanMarker(item.kind, done, c) }
         Spacer(Modifier.width(6.dp))
@@ -514,7 +521,7 @@ private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: P
             Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(6.dp))
-                .clickable { ui.edit(item, day) }
+                .then(if (locked) Modifier else Modifier.clickable { ui.edit(item, day) })
                 .padding(vertical = 2.dp)
         ) {
             Text(
@@ -527,14 +534,14 @@ private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: P
                     Plan.timeText(item),
                     item.repeat?.describe(),
                     if (item.undated) (if (done) "Done" else "No date") else null,
-                    item.kind.label,
-                ).joinToString(" · "),
+                ).plus(Plan.honestyNotes(item, day)).plus(item.kind.label).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
+                maxLines = 2, overflow = TextOverflow.Ellipsis
             )
         }
-        IconButton(onClick = { ui.delete(item, day) }) {
+        if (locked) Spacer(Modifier.size(48.dp)) // Keeps the rows lined up without the bin.
+        else IconButton(onClick = { ui.delete(item, day) }) {
             Icon(Icons.Default.Delete, contentDescription = "Delete ${item.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

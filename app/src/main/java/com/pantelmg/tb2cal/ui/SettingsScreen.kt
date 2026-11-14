@@ -535,6 +535,20 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             )
             RowDivider()
 
+            // Previous day editing: OFF (default), past days are read-only; ON, they can be changed, and it shows.
+            SettingRow(
+                icon = rememberVectorPainter(Icons.Default.DateRange),
+                title = "Allow previous day editing",
+                subtitle = "Removing past TimeBlocks, and adding, ticking, changing or removing Tasks/Events on past " +
+                    "days. OFF: Only today and later. ON: Allowed, and they show \"Added in retrospect\" or " +
+                    "\"Ticked later\" / \"Unticked later\" in the app and Statistics.",
+                onClick = { Repo.updateSettings { it.copy(allowPast = !it.allowPast) } },
+                trailing = {
+                    Switch(checked = settings.allowPast, onCheckedChange = { v -> Repo.updateSettings { it.copy(allowPast = v) } })
+                }
+            )
+            RowDivider()
+
             // Reminders for tasks and events with a time: At the start (default) or some minutes before.
             SettingRow(
                 icon = painterResource(R.drawable.ic_s_clock),

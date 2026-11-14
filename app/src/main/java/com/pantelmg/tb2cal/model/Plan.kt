@@ -146,6 +146,8 @@ data class PlanItem(
     val createdAt: Long = 0,
     /** Events: Its id in TB2Cal's phone calendar. */
     val providerId: Long? = null,
+    /** Tasks: Days ticked or unticked on a later day (Settings: Allow previous day editing). */
+    val lateDays: Set<Long> = emptySet(),
 ) {
     val undated: Boolean get() = kind == ItemKind.TASK && repeat == null && day == null
     val repeats: Boolean get() = repeat != null
@@ -156,6 +158,7 @@ data class PlanItem(
         .put("r", repeat?.toJson() ?: JSONObject.NULL)
         .put("done", JSONArray(doneDays.toList())).put("doneAt", doneAt ?: -1L)
         .put("skip", JSONArray(skipped.toList())).put("c", createdAt).put("p", providerId ?: -1L)
+        .put("late", JSONArray(lateDays.toList()))
 
     companion object {
         fun fromJson(o: JSONObject) = PlanItem(
@@ -172,6 +175,7 @@ data class PlanItem(
             skipped = o.optJSONArray("skip")?.let { a -> List(a.length()) { a.optLong(it) }.toSet() } ?: emptySet(),
             createdAt = o.optLong("c"),
             providerId = o.optLong("p", -1L).takeIf { it >= 0 },
+            lateDays = o.optJSONArray("late")?.let { a -> List(a.length()) { a.optLong(it) }.toSet() } ?: emptySet(),
         )
     }
 }
@@ -293,6 +297,20 @@ object Plan {
                 .thenBy { it.startMs }
         )
     }
+
+    /** Added in retrospect: An occurrence on a day before the item was added (Settings: Allow previous day editing). */
+    fun inRetrospect(item: PlanItem, day: Long?): Boolean = day != null && day < dayOf(item.createdAt)
+
+    /**
+     * Notes for a Task/Event on [day] (Settings: Allow previous day editing): "Added in retrospect", and for tasks
+     * ticked or unticked after their day "Ticked later" / "Unticked later".
+     */
+    fun honestyNotes(item: PlanItem, day: Long?): List<String> = listOfNotNull(
+        if (inRetrospect(item, day)) "Added in retrospect" else null,
+        if (day != null && item.kind == ItemKind.TASK && day in item.lateDays) {
+            if (day in item.doneDays) "Ticked later" else "Unticked later"
+        } else null,
+    )
 
     /** Open undated tasks, oldest first (top of today's list and the widget). */
     fun openUndated(items: List<PlanItem>): List<PlanItem> =

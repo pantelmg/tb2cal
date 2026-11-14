@@ -250,6 +250,11 @@ data class Settings(
     val planWidgetDone: String = "CROSS",
     /** Task/Event reminders: Minutes before the start (0: At the start). */
     val remindBefore: Int = 0,
+    /**
+     * Previous day editing: Removing past TimeBlocks, and adding, ticking, changing or removing Tasks/Events on past
+     * days (shown "Added in retrospect", "Ticked later" / "Unticked later"); OFF: Only today and later.
+     */
+    val allowPast: Boolean = false,
     /** Statistics: "TB" (TimeBlocks) or "TE" (Tasks/Events); In Tasks/Events: "TASKS", "EVENTS" or "BOTH". */
     val statsMode: String = "TB",
     val statsItems: String = "BOTH",
@@ -276,7 +281,7 @@ data class Settings(
         .put("accent", accent)
         .put("taskColor", taskColor).put("eventColor", eventColor).put("othersSee", othersSeeCalendar)
         .put("planList", planWidgetList).put("widgetGmailOn", widgetGmail)
-        .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn).put("planDone", planWidgetDone).put("remindBefore", remindBefore)
+        .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn).put("planDone", planWidgetDone).put("remindBefore", remindBefore).put("allowPast", allowPast)
         .put("statsMode", statsMode).put("statsItems", statsItems)
         .put("dayEntries", dayEntries).put("gmailAccount", gmailAccount).put("allowHide", allowHide)
         .put("holidayOff", org.json.JSONArray().also { a -> holidayOff.forEach { a.put(it) } })
@@ -329,6 +334,7 @@ data class Settings(
             widgetGmail = o.optBoolean("widgetGmailOn", true),
             planWidgetDone = o.optString("planDone").ifEmpty { "CROSS" },
             remindBefore = o.optInt("remindBefore", 0),
+            allowPast = o.optBoolean("allowPast", false),
             statsMode = o.optString("statsMode").ifEmpty { "TB" },
             statsItems = o.optString("statsItems").ifEmpty { "BOTH" },
             gmailAccount = o.optString("gmailAccount"),

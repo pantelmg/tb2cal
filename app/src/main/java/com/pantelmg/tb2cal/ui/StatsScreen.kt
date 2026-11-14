@@ -399,12 +399,16 @@ fun StatsScreen() {
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(Fmt.duration(r.totalMs), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            IconButton(onClick = { toDelete = r }) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Delete ${r.name}",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            // Deleting removes the period's TimeBlocks: With past days in it, only with previous day
+                            // editing on (Settings).
+                            if (settings.allowPast || !start.isBefore(java.time.LocalDate.now())) {
+                                IconButton(onClick = { toDelete = r }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete ${r.name}",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                         val barColor = GoogleColors.byKey(r.colorKey)?.let { Color(it.argb) } ?: MaterialTheme.colorScheme.primary
@@ -655,8 +659,7 @@ private fun ColumnScope.PlanStats(rows: List<PlanOccurrence>, done: Int, which: 
                         listOfNotNull(
                             Plan.shortDate(o.day ?: Plan.dayOf(o.startMs)),
                             if (o.day == null) "Done" else Plan.timeText(o.item),
-                            o.item.kind.label,
-                        ).joinToString(" · "),
+                        ).plus(Plan.honestyNotes(o.item, o.day)).plus(o.item.kind.label).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

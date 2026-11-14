@@ -38,6 +38,12 @@ object Plans {
         return GoogleColors.byKey(key)?.argb?.toInt() ?: 0xFF1565C0.toInt()
     }
 
+    /**
+     * Whether a past day's records may be changed: Always for today and later (and tasks without a date); For
+     * earlier days only with Settings → Allow previous day editing.
+     */
+    fun canChange(day: Long?): Boolean = day == null || day >= Plan.today() || Repo.settings.value.allowPast
+
     /** Adds or replaces an item. */
     fun save(ctx: Context, item: PlanItem) {
         Repo.putItem(item)
@@ -73,18 +79,87 @@ object Plans {
             edited.copy(
                 id = newId(), day = newDay,
                 doneDays = if (wasDone && newDay != null) setOf(newDay) else emptySet(),
-                doneAt = null, skipped = emptySet(), providerId = null, createdAt = System.currentTimeMillis(),
+                doneAt = null, skipped = emptySet(), providerId = null, createdAt = series.createdAt,
+                lateDays = if (day in series.lateDays && newDay != null) setOf(newDay) else emptySet(),
             )
         )
     }
 
-    /** Ticks a task off (or back on): One day of a dated/repeating task, or the whole undated task. */
-    fun setDone(ctx: Context, item: PlanItem, day: Long?, done: Boolean) {
+    /**
+     * "This and following" (previous day editing OFF): The repeat keeps its days before [day] as they are and ends
+     * the day before; From [day] on, the edited version continues as a new item.
+     */
+    fun editFrom(ctx: Context, series: PlanItem, day: Long, edited: PlanItem) {
+        val r = series.repeat
+        val before = if (r == null) 0 else Plan.occurrences(series.copy(skipped = emptySet()), r.startDay, day).size
+        if (r == null || before == 0) {
+            save(ctx, edited)
+            return
+        }
+        endBefore(ctx, series, day)
+        val er = edited.repeat
+        val next = if (er == null) {
+            val d = edited.day ?: day
+            edited.copy(
+                id = newId(), day = d, doneDays = series.doneDays.filter { it == d }.toSet(), skipped = emptySet(),
+                lateDays = series.lateDays.filter { it == d }.toSet(),
+            )
+        } else {
+            edited.copy(
+                id = newId(),
+                repeat = er.copy(
+                    startDay = maxOf(er.startDay, day),
+                    // The count goes on from where the earlier days left it (if it wasn't changed).
+                    count = er.count?.let { n -> if (n == r.count) (n - before).coerceAtLeast(1) else n },
+                ),
+                doneDays = series.doneDays.filter { it >= day }.toSet(),
+                skipped = series.skipped.filter { it >= day }.toSet(),
+                lateDays = series.lateDays.filter { it >= day }.toSet(),
+            )
+        }
+        save(ctx, next.copy(doneAt = null, providerId = null, createdAt = series.createdAt))
+    }
+
+    /** "This and following" delete: Days before [day] stay; The repeat ends the day before (or goes, if none). */
+    fun deleteFrom(ctx: Context, series: PlanItem, day: Long) {
+        val r = series.repeat
+        if (r == null || Plan.occurrences(series.copy(skipped = emptySet()), r.startDay, day).isEmpty()) {
+            delete(ctx, series)
+            return
+        }
+        endBefore(ctx, series, day)
+    }
+
+    private fun endBefore(ctx: Context, series: PlanItem, day: Long) {
+        val r = series.repeat ?: return
+        save(
+            ctx,
+            series.copy(
+                repeat = r.copy(endDay = day - 1, count = null),
+                doneDays = series.doneDays.filter { it < day }.toSet(),
+                skipped = series.skipped.filter { it < day }.toSet(),
+                lateDays = series.lateDays.filter { it < day }.toSet(),
+            )
+        )
+    }
+
+    /**
+     * Ticks a task off (or back on): One day of a dated/repeating task, or the whole undated task. A past day only
+     * with previous day editing on; Then it's noted "Ticked later" / "Unticked later". Returns whether it changed.
+     */
+    fun setDone(ctx: Context, item: PlanItem, day: Long?, done: Boolean): Boolean {
+        val undatedDoneDay = if (item.undated && !done) item.doneAt?.let { Plan.dayOf(it) } else null
+        if (!canChange(day ?: undatedDoneDay)) return false
+        val today = Plan.today()
         Repo.updateItem(item.id) {
             if (it.undated || day == null) it.copy(doneAt = if (done) System.currentTimeMillis() else null)
-            else it.copy(doneDays = if (done) it.doneDays + day else it.doneDays - day)
+            else it.copy(
+                doneDays = if (done) it.doneDays + day else it.doneDays - day,
+                lateDays = if (day < today) it.lateDays + day else it.lateDays - day,
+            )
         }
         Reminders.schedule(ctx.applicationContext)
+        return true
     }
 
     /** Events: Copies into TB2Cal's phone calendar again (after a change, or a color change for all of them). */

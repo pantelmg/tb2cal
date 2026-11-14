@@ -207,8 +207,10 @@ internal object StatsPdf {
                         val time = if (o.day == null) "Done " + java.text.SimpleDateFormat("HH:mm", locale).format(java.util.Date(o.startMs))
                         else Plan.timeText(o.item) ?: "—"
                         c.drawText(ellipsize(time, text, colTitle - colTime - 8f), colTime, y, text)
-                        c.drawText(ellipsize(o.item.title, text, right - 60f - colTitle), colTitle, y, text)
-                        c.drawText(o.item.kind.label, right, y, textRight)
+                        // Kind, with "Added in retrospect" / "Ticked later" when so (Settings: Allow previous day editing).
+                        val kind = (Plan.honestyNotes(o.item, o.day) + o.item.kind.label).joinToString(" · ")
+                        c.drawText(ellipsize(o.item.title, text, right - textRight.measureText(kind) - 12f - colTitle), colTitle, y, text)
+                        c.drawText(kind, right, y, textRight)
                         c.drawLine(M, y + 6f, right, y + 6f, line)
                         y += 20f
                     }

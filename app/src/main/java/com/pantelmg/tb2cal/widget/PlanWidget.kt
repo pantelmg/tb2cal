@@ -184,6 +184,8 @@ class PlanWidgetService : RemoteViewsService() {
 
     private class Row(
         val title: String, val sub: String?, val color: Int, val taskId: String?, val day: Long?, val crossed: Boolean,
+        /** A past day's task with previous day editing off: Not tickable here. */
+        val locked: Boolean = false,
     )
 
     private class Factory(private val ctx: Context) : RemoteViewsService.RemoteViewsFactory {
@@ -196,6 +198,8 @@ class PlanWidgetService : RemoteViewsService() {
             Repo.init(ctx)
             rows = runCatching { compute() }.getOrDefault(emptyList())
         }
+
+        private fun locked(day: Long) = !Plans.canChange(day)
 
         private fun compute(): List<Row> {
             val st = Repo.settings.value
@@ -215,12 +219,13 @@ class PlanWidgetService : RemoteViewsService() {
                     .filter { (item, d) -> keepDone || d !in item.doneDays }
                     .sortedBy { (item, d) -> Plan.startMs(item, d) }
                     .forEach { (item, d) ->
-                        out += Row(item.title, listOfNotNull(Plan.timeText(item), item.repeat?.describe()).joinToString(" · ").ifEmpty { null },
-                            color, item.id, d, d in item.doneDays)
+                        out += Row(item.title, (listOfNotNull(Plan.timeText(item), item.repeat?.describe()) +
+                            Plan.honestyNotes(item, d)).joinToString(" · ").ifEmpty { null },
+                            color, item.id, d, d in item.doneDays, locked = locked(d))
                     }
                 if (keepDone) items.filter { it.undated && it.doneAt?.let { at -> Plan.dayOf(at) } == day }
                     .sortedBy { it.doneAt }
-                    .forEach { out += Row(it.title, null, color, it.id, null, true) }
+                    .forEach { out += Row(it.title, null, color, it.id, null, true, locked = locked(day)) }
             }
             var nextEnd: Long? = null
             if (st.planWidgetList != "TASKS") {
@@ -234,7 +239,8 @@ class PlanWidgetService : RemoteViewsService() {
                         if (!over) nextEnd = minOf(nextEnd ?: Long.MAX_VALUE, e.endMs)
                         if (over && !keepDone) return@forEach
                         val time = if (e.allDay) "All day" else "${tf.format(Date(e.startMs))} – ${tf.format(Date(e.endMs))}"
-                        out += Row(e.label, if (e.plan == null) "$time · Gmail" else time, e.color, null, null, over)
+                        val notes = e.plan?.let { Plan.honestyNotes(it, e.planDay) }.orEmpty()
+                        out += Row(e.label, if (e.plan == null) "$time · Gmail" else (listOf(time) + notes).joinToString(" · "), e.color, null, null, over)
                     }
             }
             PlanWidget.scheduleRedraw(ctx, nextEnd)
@@ -262,12 +268,15 @@ class PlanWidgetService : RemoteViewsService() {
             }
             if (r.taskId != null) {
                 v.setViewVisibility(R.id.row_tick, View.VISIBLE)
+                v.setInt(R.id.row_tick, "setImageAlpha", if (r.locked) 110 else 255)
                 v.setViewVisibility(R.id.row_dot, View.GONE)
                 v.setImageViewResource(R.id.row_tick, if (r.crossed) R.drawable.ic_w_box_done else R.drawable.ic_w_box)
                 v.setInt(R.id.row_tick, "setColorFilter", r.color)
+                // Locked (past day): The tap carries no task, so nothing changes.
                 v.setOnClickFillInIntent(
                     R.id.row_tick,
-                    Intent().putExtra(PlanWidget.EXTRA_ID, r.taskId).putExtra(PlanWidget.EXTRA_DAY, r.day ?: -1L)
+                    if (r.locked) Intent()
+                    else Intent().putExtra(PlanWidget.EXTRA_ID, r.taskId).putExtra(PlanWidget.EXTRA_DAY, r.day ?: -1L)
                         .putExtra(PlanWidget.EXTRA_DONE, r.crossed)
                 )
             } else {

@@ -107,6 +107,7 @@ object DataTransfer {
             ),
             doneDays = item.doneDays.filter { it in first..last }.toSet(),
             skipped = item.skipped.filter { it in first..last }.toSet(),
+            lateDays = item.lateDays.filter { it in first..last }.toSet(),
             providerId = null,
         )
     }

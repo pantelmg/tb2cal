@@ -88,6 +88,8 @@ import com.pantelmg.tb2cal.model.RepeatUnit
 import com.pantelmg.tb2cal.plan.Plans
 import java.time.DayOfWeek
 import java.time.LocalDate
+import com.pantelmg.tb2cal.data.Repo
+import androidx.compose.runtime.collectAsState
 import java.time.LocalTime
 import java.time.format.TextStyle
 import java.util.Locale
@@ -100,8 +102,11 @@ class PlanUi {
     var editing by mutableStateOf<Pair<PlanItem, Long?>?>(null)
     var askEdit by mutableStateOf<Pair<PlanItem, Long>?>(null)
     var askDelete by mutableStateOf<Pair<PlanItem, Long?>?>(null)
+    /** Editing a repeat from a day on ("This and following"), keeping its earlier days as they are. */
+    var editingFrom by mutableStateOf<Pair<PlanItem, Long>?>(null)
 
-    val busy: Boolean get() = chooser || newKind != null || editing != null || askEdit != null || askDelete != null
+    val busy: Boolean get() = chooser || newKind != null || editing != null || askEdit != null || askDelete != null ||
+        editingFrom != null
 
     fun add() { chooser = true }
 
@@ -118,6 +123,10 @@ class PlanUi {
 @Composable
 fun PlanDialogs(ui: PlanUi, defaultDay: Long, onClosed: () -> Unit = {}) {
     val ctx = LocalContext.current
+    val allowPast = Repo.settings.collectAsState().value.allowPast
+    // Past days not allowed (Settings): Added from a past day, a new task or event starts today.
+    @Suppress("NAME_SHADOWING")
+    val defaultDay = if (allowPast) defaultDay else maxOf(defaultDay, Plan.today())
     fun close() = onClosed()
 
     if (ui.chooser) {
@@ -141,14 +150,36 @@ fun PlanDialogs(ui: PlanUi, defaultDay: Long, onClosed: () -> Unit = {}) {
         )
         null -> {}
     }
+    // Previous day editing OFF and the repeat has earlier days: "This and following" instead of "All repeats", so
+    // its earlier days stay as they were.
+    fun keepsPast(item: PlanItem): Boolean {
+        val r = item.repeat ?: return false
+        return !allowPast && Plan.occurrences(item, r.startDay, Plan.today()).isNotEmpty()
+    }
     ui.askEdit?.let { (item, day) ->
+        val keep = keepsPast(item)
         ScopeDialog(
             title = "Edit ${item.title}",
-            text = "It repeats. Edit this day only, or all its repeats?",
+            text = if (keep) "It repeats. Edit this day only, or this and the following days? Earlier days stay as " +
+                "they are (Settings: Allow previous day editing is OFF)."
+            else "It repeats. Edit this day only, or all its repeats?",
+            allLabel = if (keep) "This and following" else "All repeats",
             onThisDay = { ui.askEdit = null; ui.editing = item to day },
-            onAll = { ui.askEdit = null; ui.editing = item to null },
+            onAll = {
+                ui.askEdit = null
+                if (keep) ui.editingFrom = item to day else ui.editing = item to null
+            },
             onDismiss = { ui.askEdit = null; close() }
         )
+    }
+    ui.editingFrom?.let { (item, day) ->
+        val save: (PlanItem) -> Unit = { edited ->
+            Plans.editFrom(ctx, item, day, edited)
+            ui.editingFrom = null
+            close()
+        }
+        if (item.kind == ItemKind.TASK) TaskSheet(item, onSave = save, onDismiss = { ui.editingFrom = null; close() })
+        else EventEditor(item, defaultDay, onSave = save, onDismiss = { ui.editingFrom = null; close() })
     }
     ui.editing?.let { (item, day) ->
         // This day only: Edited as a one-time item on that day; It then leaves the repeat.
@@ -163,11 +194,19 @@ fun PlanDialogs(ui: PlanUi, defaultDay: Long, onClosed: () -> Unit = {}) {
     }
     ui.askDelete?.let { (item, day) ->
         if (item.repeats && day != null) {
+            val keep = keepsPast(item)
             ScopeDialog(
                 title = "Delete ${item.title}?",
-                text = "It repeats. Delete this day only, or all its repeats? This can't be undone.",
+                text = if (keep) "It repeats. Delete this day only, or this and the following days? Earlier days " +
+                    "stay (Settings: Allow previous day editing is OFF). This can't be undone."
+                else "It repeats. Delete this day only, or all its repeats? This can't be undone.",
+                allLabel = if (keep) "This and following" else "All repeats",
                 onThisDay = { Plans.deleteDay(ctx, item, day); ui.askDelete = null; close() },
-                onAll = { Plans.delete(ctx, item); ui.askDelete = null; close() },
+                onAll = {
+                    if (keep) Plans.deleteFrom(ctx, item, day) else Plans.delete(ctx, item)
+                    ui.askDelete = null
+                    close()
+                },
                 onDismiss = { ui.askDelete = null; close() }
             )
         } else {
@@ -187,12 +226,15 @@ fun PlanDialogs(ui: PlanUi, defaultDay: Long, onClosed: () -> Unit = {}) {
 }
 
 @Composable
-private fun ScopeDialog(title: String, text: String, onThisDay: () -> Unit, onAll: () -> Unit, onDismiss: () -> Unit) {
+private fun ScopeDialog(
+    title: String, text: String, onThisDay: () -> Unit, onAll: () -> Unit, onDismiss: () -> Unit,
+    allLabel: String = "All repeats",
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(text) },
-        confirmButton = { TextButton(onClick = onAll) { Text("All repeats") } },
+        confirmButton = { TextButton(onClick = onAll) { Text(allLabel) } },
         dismissButton = { TextButton(onClick = onThisDay) { Text("This day only") } }
     )
 }
@@ -374,7 +416,8 @@ fun TaskSheet(initial: PlanItem?, onSave: (PlanItem) -> Unit, onDismiss: () -> U
             onDismiss = { showRepeat = false }
         )
     }
-    if (pickDate) DayPickerDialog(date ?: Plan.today(), onPick = { date = it }, onDismiss = { pickDate = false })
+    if (pickDate) DayPickerDialog(date ?: Plan.today(), onPick = { date = it }, onDismiss = { pickDate = false },
+        minDay = firstAllowedDay(initial?.day))
     if (pickTime) ClockPickerDialog(time ?: 9 * 60, onPick = { time = it }, onDismiss = { pickTime = false })
 }
 
@@ -454,7 +497,8 @@ fun EventEditor(initial: PlanItem?, defaultDay: Long, onSave: (PlanItem) -> Unit
             }
         }
     }
-    if (pickDay) DayPickerDialog(day, onPick = { day = it }, onDismiss = { pickDay = false })
+    if (pickDay) DayPickerDialog(day, onPick = { day = it }, onDismiss = { pickDay = false },
+        minDay = firstAllowedDay(initial?.day ?: initial?.repeat?.startDay))
     if (pickStart) ClockPickerDialog(start, onPick = { v ->
         val len = end - start
         start = v
@@ -649,7 +693,7 @@ fun RepeatDialog(
             }
         }
     }
-    if (pickStart) DayPickerDialog(start, onPick = {
+    if (pickStart) DayPickerDialog(start, minDay = firstAllowedDay(initial?.startDay), onPick = {
         start = it
         if (!endPicked) endDay = it
     }, onDismiss = { pickStart = false })
@@ -659,8 +703,15 @@ fun RepeatDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DayPickerDialog(day: Long, onPick: (Long) -> Unit, onDismiss: () -> Unit) {
-    val state = rememberDatePickerState(initialSelectedDateMillis = day * 86_400_000L)
+fun DayPickerDialog(day: Long, onPick: (Long) -> Unit, onDismiss: () -> Unit, minDay: Long? = null) {
+    // [minDay]: Days before it can't be picked (past days, unless allowed in Settings).
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = day * 86_400_000L,
+        selectableDates = object : androidx.compose.material3.SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long) = minDay == null || Math.floorDiv(utcTimeMillis, 86_400_000L) >= minDay
+            override fun isSelectableYear(year: Int) = minDay == null || year >= LocalDate.ofEpochDay(minDay).year
+        }
+    )
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -708,4 +759,16 @@ fun PlanMarker(kind: ItemKind, done: Boolean, color: Color, size: androidx.compo
         tint = color,
         modifier = Modifier.size(size)
     )
+}
+
+/**
+ * The first day a date picker allows: None when past days are allowed (Settings), else today, or an earlier day the
+ * item already had (so editing it keeps working).
+ */
+@Composable
+fun firstAllowedDay(current: Long?): Long? {
+    val allowPast = Repo.settings.collectAsState().value.allowPast
+    if (allowPast) return null
+    val today = Plan.today()
+    return if (current != null && current < today) current else today
 }
