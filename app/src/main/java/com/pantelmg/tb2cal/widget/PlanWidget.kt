@@ -219,7 +219,7 @@ class PlanWidgetService : RemoteViewsService() {
                     .filter { (item, d) -> keepDone || d !in item.doneDays }
                     .sortedBy { (item, d) -> Plan.startMs(item, d) }
                     .forEach { (item, d) ->
-                        out += Row(item.title, (listOfNotNull(Plan.timeText(item), item.repeat?.describe()) +
+                        out += Row(item.title, (listOfNotNull(Plan.timeText(item), Plan.scheduleText(item)) +
                             Plan.honestyNotes(item, d)).joinToString(" · ").ifEmpty { null },
                             color, item.id, d, d in item.doneDays, locked = locked(d))
                     }

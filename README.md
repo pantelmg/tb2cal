@@ -52,7 +52,8 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
   - **No date** (like Google Tasks): Listed, marked "No date", at the top of the day lists (app and widget) from the
     day it was added onward until ticked or deleted; Not in the calendars until then; Once ticked it shows, crossed
     out, on the day it was done.
-  - **With a date:** On that day (calendars and lists), crossed out once ticked; With a time, it also gets a reminder.
+  - **With a date:** On that day (calendars and lists), shown as **Today only** (or e.g. **02/11/26 only**), crossed
+    out once ticked; With a time, it also gets a reminder.
   - **Repeating:** On their days, crossed out once ticked.
 - **Event:** Its name, date, all day or from–to times, and Repeat…. It counts as completed once its time is over.
   Events are also saved in TB2Cal's phone calendar.

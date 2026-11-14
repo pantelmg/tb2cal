@@ -545,7 +545,7 @@ private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: P
             Text(
                 listOfNotNull(
                     Plan.timeText(item),
-                    item.repeat?.describe(),
+                    Plan.scheduleText(item),
                     if (item.undated) (if (done) "Done" else "No date") else null,
                 ).plus(Plan.honestyNotes(item, day)).plus(item.kind.label).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,

@@ -78,10 +78,7 @@ data class Repeat(
      * happens on one day only: "Today only" or "02/11/26 only".
      */
     fun describe(): String {
-        onlyDay()?.let { d ->
-            return if (d == Plan.today()) "Today only"
-            else "${LocalDate.ofEpochDay(d).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH))} only"
-        }
+        onlyDay()?.let { d -> return Plan.onlyText(d) }
         return describeRule()
     }
 
@@ -311,6 +308,18 @@ object Plan {
             if (day in item.doneDays) "Ticked later" else "Unticked later"
         } else null,
     )
+
+    /** A one-day task: "Today only", or e.g. "02/11/26 only" for another day. */
+    fun onlyText(day: Long): String =
+        if (day == today()) "Today only"
+        else "${LocalDate.ofEpochDay(day).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH))} only"
+
+    /**
+     * How often an item happens, for the lists: Its repeat ("Every day", "Today only" for a one-day repeat), or for a
+     * task with a date and no repeat "Today only" / "02/11/26 only" (the same thing); null otherwise.
+     */
+    fun scheduleText(item: PlanItem): String? = item.repeat?.describe()
+        ?: if (item.kind == ItemKind.TASK && item.day != null) onlyText(item.day) else null
 
     /** Open undated tasks, oldest first (top of today's list and the widget). */
     fun openUndated(items: List<PlanItem>): List<PlanItem> =
