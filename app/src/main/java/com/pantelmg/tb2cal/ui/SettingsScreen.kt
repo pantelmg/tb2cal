@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
@@ -489,6 +490,32 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
                 onClick = { Repo.updateSettings { it.copy(widgetGmail = !it.widgetGmail) } },
                 trailing = {
                     Switch(checked = settings.widgetGmail, onCheckedChange = { v -> Repo.updateSettings { it.copy(widgetGmail = v) } })
+                }
+            )
+            RowDivider()
+
+            // Tapping a task/event on the widget: Shows it in the app (ON by default).
+            SettingRow(
+                icon = painterResource(R.drawable.ic_w_list_both),
+                title = "Tapping a task/event on the widget shows it in the app",
+                subtitle = "Opens the Calendar tab on its day, with it at the top of the list, pulsing.",
+                onClick = { Repo.updateSettings { it.copy(widgetOpensApp = !it.widgetOpensApp) } },
+                trailing = {
+                    Switch(checked = settings.widgetOpensApp, onCheckedChange = { v -> Repo.updateSettings { it.copy(widgetOpensApp = v) } })
+                }
+            )
+            RowDivider()
+
+            // Temporary reordering of the day lists (ON by default).
+            SettingRow(
+                icon = rememberVectorPainter(Icons.AutoMirrored.Filled.List),
+                title = "Allow temporary reordering",
+                subtitle = "Touch and hold any entry of a day's list (short vibration) to move it up or down; Entries " +
+                    "pulse when touched. The order also shows on the month grid and the widgets. Switching Import " +
+                    "from your Gmail or TB Total puts every list back in its normal order.",
+                onClick = { Repo.updateSettings { it.copy(allowReorder = !it.allowReorder) } },
+                trailing = {
+                    Switch(checked = settings.allowReorder, onCheckedChange = { v -> Repo.updateSettings { it.copy(allowReorder = v) } })
                 }
             )
             RowDivider()

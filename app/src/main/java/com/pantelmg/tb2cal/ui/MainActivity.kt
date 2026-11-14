@@ -142,6 +142,8 @@ class MainActivity : ComponentActivity() {
             ACTION_OPEN_MAIN -> go(Screen.MAIN)
             ACTION_OPEN_CALENDAR_DAY -> {
                 CalendarNav.day.value = i?.getLongExtra(EXTRA_EPOCH_DAY, LocalDate.now().toEpochDay()) ?: LocalDate.now().toEpochDay()
+                // From the Task/Event widget: That entry at the top of the day's list, pulsing.
+                CalendarNav.focus.value = i?.getStringExtra(EXTRA_FOCUS)
                 go(Screen.CALENDAR)
             }
             ACTION_OPEN_STATS_DAY -> {
@@ -165,6 +167,7 @@ class MainActivity : ComponentActivity() {
         const val ACTION_OPEN_STATS_DAY = "com.pantelmg.tb2cal.action.OPEN_STATS_DAY"
         const val ACTION_OPEN_CALENDAR_DAY = "com.pantelmg.tb2cal.action.OPEN_CALENDAR_DAY"
         const val EXTRA_EPOCH_DAY = "epoch_day"
+        const val EXTRA_FOCUS = "focus"
         private const val KEY_RETURN_HOME = "return_home"
     }
 }

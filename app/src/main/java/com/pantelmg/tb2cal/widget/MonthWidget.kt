@@ -116,7 +116,11 @@ class MonthWidget : AppWidgetProvider() {
             val byDay: Map<LocalDate, List<DayItem>> =
                 runCatching {
                     // TB Total on: Same-name TimeBlocks of a day merged, as in the Calendar tab.
-                    CalendarData.shown(CalendarData.byDay(ctx, gridStart, gridEnd), Repo.settings.value.tbTotal)
+                    // TB Total, then reordered days (Settings: Allow temporary reordering), as in the app.
+                    CalendarData.ordered(
+                        CalendarData.shown(CalendarData.byDay(ctx, gridStart, gridEnd), Repo.settings.value.tbTotal),
+                        Repo.orders.value, Repo.settings.value.allowReorder
+                    )
                 }.getOrDefault(emptyMap())
 
             // ---- 6 × 7 grid ----

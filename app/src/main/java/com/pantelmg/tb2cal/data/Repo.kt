@@ -50,7 +50,43 @@ object Repo {
             history.value = readList("history") { HistoryEntry.fromJson(it) } ?: emptyList()
             goals.value = readList("goals") { Goal.fromJson(it) } ?: emptyList()
             items.value = readList("items") { PlanItem.fromJson(it) } ?: emptyList()
+            orders.value = runCatching {
+                val o = JSONObject(sp.getString("orders", null) ?: "{}")
+                o.keys().asSequence().associate { k ->
+                    val a = o.getJSONArray(k)
+                    k.toLong() to List(a.length()) { a.getString(it) }
+                }
+            }.getOrDefault(emptyMap())
         }
+    }
+
+    // ---- Reordered day lists (Settings: Allow temporary reordering): Day → entry keys in the chosen order ----
+    val orders = MutableStateFlow<Map<Long, List<String>>>(emptyMap())
+
+    fun setOrder(day: Long, keys: List<String>) {
+        synchronized(lock) {
+            // Kept for the last 90 days and later ones.
+            val keepFrom = java.time.LocalDate.now().toEpochDay() - 90
+            val m = orders.value.filterKeys { it >= keepFrom } + (day to keys)
+            orders.value = m
+            writeOrders(m)
+        }
+        changed()
+    }
+
+    /** Back to the normal order everywhere. */
+    fun clearOrders() {
+        synchronized(lock) {
+            if (orders.value.isEmpty()) return
+            orders.value = emptyMap()
+            writeOrders(emptyMap())
+        }
+    }
+
+    private fun writeOrders(m: Map<Long, List<String>>) {
+        val o = JSONObject()
+        m.forEach { (d, keys) -> o.put(d.toString(), JSONArray(keys)) }
+        sp.edit().putString("orders", o.toString()).apply()
     }
 
     // ---- Blocks ----
@@ -114,9 +150,14 @@ object Repo {
     // ---- Settings ----
     fun updateSettings(f: (Settings) -> Settings) {
         synchronized(lock) {
-            val s = f(settings.value)
+            val old = settings.value
+            val s = f(old)
             settings.value = s
             sp.edit().putString("settings", s.toJson().toString()).apply()
+            // Settings that change which entries the lists hold put every reordered list back in its normal order.
+            if (old.gmailView != s.gmailView || old.tbTotal != s.tbTotal || old.gmailAccount != s.gmailAccount ||
+                old.holidayOff != s.holidayOff || (old.allowReorder && !s.allowReorder)
+            ) clearOrders()
         }
         changed()
     }

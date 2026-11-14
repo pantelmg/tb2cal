@@ -78,6 +78,37 @@ object CalendarData {
     fun shown(byDay: Map<LocalDate, List<DayItem>>, tbTotal: Boolean): Map<LocalDate, List<DayItem>> =
         if (tbTotal) byDay.mapValues { (_, l) -> mergeTotals(l) } else byDay
 
+    /** A day entry's identity, for reordering: Task/Event, TimeBlock (or its TB Total), Gmail event. */
+    fun entryKey(i: DayItem): String {
+        val plan = i.plan
+        return when {
+            plan != null -> "p:${plan.id}"
+            i.isTimeBlock && i.parts.isNotEmpty() -> "tbt:${i.blockName?.trim()?.lowercase()}"
+            i.isTimeBlock -> "tb:${i.blockName?.trim()?.lowercase()}@${i.startMs}"
+            else -> "g:${i.eventId}@${i.startMs}"
+        }
+    }
+
+    /**
+     * [list] in a reordered day's [order] (entry keys): The entries it names take the places such entries hold
+     * in the normal order, sorted as in [order]; Others (new ones) stay in their normal place.
+     */
+    fun <T> applyOrder(list: List<T>, order: List<String>?, key: (T) -> String): List<T> {
+        if (order.isNullOrEmpty()) return list
+        val rank = order.withIndex().associate { (i, k) -> k to i }
+        val slots = list.indices.filter { key(list[it]) in rank }
+        if (slots.size < 2) return list
+        val sorted = slots.map { list[it] }.sortedBy { rank[key(it)] }
+        val out = list.toMutableList()
+        slots.forEachIndexed { n, i -> out[i] = sorted[n] }
+        return out
+    }
+
+    /** Every day of [map] in its reordered order (when reordering is on). */
+    fun ordered(map: Map<LocalDate, List<DayItem>>, orders: Map<Long, List<String>>, enabled: Boolean): Map<LocalDate, List<DayItem>> =
+        if (!enabled || orders.isEmpty()) map
+        else map.mapValues { (d, l) -> applyOrder(l, orders[d.toEpochDay()]) { entryKey(it) } }
+
     /**
      * TB2Cal's own entries per day for [from, toExclusive): Completed TimeBlocks of [history] and the Tasks/Events of
      * [items] (outlined, one color each; Done tasks crossed out; Undated ones on the day they were done). No Gmail.

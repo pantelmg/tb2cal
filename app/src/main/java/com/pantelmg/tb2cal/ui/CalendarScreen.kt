@@ -34,6 +34,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -90,6 +99,37 @@ import java.util.Locale
 /** A day to open in the Calendar tab (set by the Calendar widget). */
 object CalendarNav {
     val day = MutableStateFlow<Long?>(null)
+    /** An entry to show (widget tap): Scrolled to the top of its day's list, pulsing. Its entry key. */
+    val focus = MutableStateFlow<String?>(null)
+}
+
+/** Which entry pulses, and a counter so the same one can pulse again. */
+class Pulse {
+    var key by mutableStateOf<String?>(null)
+    var n by mutableIntStateOf(0)
+    fun fire(k: String) {
+        key = k
+        n++
+    }
+}
+
+/** Pulses its content's background (twice) when [pulse] fires for [key]. */
+@Composable
+private fun PulseBox(key: String, color: Color, pulse: Pulse, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val a = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(pulse.n) {
+        if (pulse.n > 0 && pulse.key == key) {
+            repeat(2) {
+                a.animateTo(1f, androidx.compose.animation.core.tween(200))
+                a.animateTo(0f, androidx.compose.animation.core.tween(380))
+            }
+        }
+    }
+    Box(
+        modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.28f * a.value))
+    ) { content() }
 }
 
 /**
@@ -106,6 +146,8 @@ fun CalendarScreen() {
     val tick by Reliability.resumeTick.collectAsState()
     // Adding, editing and deleting Tasks/Events (sheets and dialogs).
     val planUi = remember { PlanUi() }
+    // Day-list entries pulse when touched (reordering on) or opened from the widget.
+    val pulse = remember { Pulse() }
     val locale = Locale.getDefault()
     val today = LocalDate.now()
 
@@ -152,7 +194,11 @@ fun CalendarScreen() {
     }
 
     // TB Total on: Same-name TimeBlocks of a day are shown merged (grid and list).
-    val shownByDay = remember(byDay, settings.tbTotal) { CalendarData.shown(byDay, settings.tbTotal) }
+    // TB Total, then any reordered days (Settings: Allow temporary reordering), in the grid and the day list.
+    val orders by Repo.orders.collectAsState()
+    val shownByDay = remember(byDay, settings.tbTotal, orders, settings.allowReorder) {
+        CalendarData.ordered(CalendarData.shown(byDay, settings.tbTotal), orders, settings.allowReorder)
+    }
 
     val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (CalendarWriter.hasPermission(ctx)) Repo.updateSettings {
@@ -373,15 +419,68 @@ fun CalendarScreen() {
                 Text(if (on) "TB Total ON" else "TB Total OFF", style = MaterialTheme.typography.titleSmall, color = tint)
             }
         }
-        // Only this list scrolls (and only if it doesn't fit).
-        // The list starts with the open tasks that have no date: From the day each was added onward.
+        // Only this list scrolls (and only if it doesn't fit). It starts with the open tasks that have no date (from the
+        // day each was added onward), then the day's entries; With reordering on, in the chosen order.
         val undatedOpen = remember(planItems, selected) { Plan.openUndatedOn(planItems, selected) }
-        LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth()) {
-            items(undatedOpen, key = { "u" + it.id }) { t ->
-                PlanRow(t, null, done = false, color = Plans.color(ItemKind.TASK), ui = planUi)
+        val taskColor = Plans.color(ItemKind.TASK)
+        val entries = remember(undatedOpen, dayItems, orders, settings.allowReorder, selected) {
+            val all = undatedOpen.map { t ->
+                DayItem(t.title, taskColor, 0L, 0L, allDay = true, isTimeBlock = false, plan = t, planDay = null)
+            }.plus(dayItems).distinctBy { CalendarData.entryKey(it) } // (Each entry once: The list needs unique keys.)
+            if (settings.allowReorder) CalendarData.applyOrder(all, orders[selected]) { CalendarData.entryKey(it) } else all
+        }
+        val currentEntries by rememberUpdatedState(entries)
+        // Touch+hold an entry to move it (pulse + short vibration); The order is saved for this day when let go.
+        var dragList by remember { mutableStateOf<List<DayItem>?>(null) }
+        var dragKey by remember { mutableStateOf<String?>(null) }
+        var dragDy by remember { mutableFloatStateOf(0f) }
+        val shownEntries = dragList ?: entries
+        val listState = rememberLazyListState()
+        val haptic = LocalHapticFeedback.current
+        fun moveIfNeeded() {
+            val list = dragList ?: return
+            val visible = listState.layoutInfo.visibleItemsInfo
+            val cur = visible.firstOrNull { it.key == dragKey } ?: return
+            val center = cur.offset + dragDy + cur.size / 2f
+            val target = visible.firstOrNull { v ->
+                v.key != dragKey && v.key is String && (v.key as String).startsWith("e/") &&
+                    center >= v.offset && center < v.offset + v.size
+            } ?: return
+            val from = list.indexOfFirst { "e/" + CalendarData.entryKey(it) == dragKey }
+            val to = list.indexOfFirst { "e/" + CalendarData.entryKey(it) == target.key }
+            if (from < 0 || to < 0) return
+            dragList = list.toMutableList().apply { add(to, removeAt(from)) }
+            dragDy += (cur.offset - target.offset).toFloat()
+        }
+        fun endDrag() {
+            dragList?.let { l -> Repo.setOrder(selected, l.map { CalendarData.entryKey(it) }) }
+            dragList = null
+            dragKey = null
+            dragDy = 0f
+        }
+
+        // Opened from the widget: Its entry at the top of the list, pulsing.
+        val focus by CalendarNav.focus.collectAsState()
+        LaunchedEffect(focus) {
+            // Not found within a moment (e.g. it was just deleted): Forget it.
+            if (focus != null) {
+                kotlinx.coroutines.delay(3000)
+                CalendarNav.focus.value = null
             }
-            if (dayItems.isEmpty() && undatedOpen.isEmpty()) {
-                item {
+        }
+        LaunchedEffect(focus, entries) {
+            val k = focus ?: return@LaunchedEffect
+            val i = entries.indexOfFirst { CalendarData.entryKey(it) == k }
+            if (i >= 0) {
+                runCatching { listState.scrollToItem(i) }
+                pulse.fire(k)
+                CalendarNav.focus.value = null
+            }
+        }
+
+        LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth(), state = listState) {
+            if (shownEntries.isEmpty()) {
+                item(key = "empty") {
                     Text(
                         if (day.isBefore(gridStart) || !day.isBefore(gridEnd)) "Go to this day's month to see it."
                         else "Nothing on this day.",
@@ -389,41 +488,42 @@ fun CalendarScreen() {
                     )
                 }
             }
-            items(dayItems) { item ->
-                val plan = item.plan
-                if (plan != null) {
-                    PlanRow(plan, item.planDay, item.done, item.color, planUi)
-                    return@items
-                }
-                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // Same 32dp slot as the Task/Event squares, so the colors and the names line up.
-                    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(12.dp).clip(CircleShape).background(Color(item.color)))
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(item.label, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            if (settings.tbTotal && item.isTimeBlock) "TimeBlock Total"
-                            else buildString {
-                                append(if (item.allDay) "All day" else "${tf.format(Date(item.startMs))} – ${tf.format(Date(item.endMs))}")
-                                append(if (item.isTimeBlock) " · TimeBlock" else " · Gmail")
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    // TimeBlocks can be deleted; Gmail events are read-only, but can be hidden (Settings).
-                    if (item.isTimeBlock) {
-                        // A past day's TimeBlocks can be removed only with previous day editing on (Settings).
-                        if (!settings.allowPast && day.toEpochDay() < today.toEpochDay()) Spacer(Modifier.size(48.dp))
-                        else IconButton(onClick = { toDelete = item }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete ${item.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } else if (settings.allowHide && item.eventId != null) {
-                        IconButton(onClick = { toHide = item }) {
-                            Icon(painterResource(R.drawable.ic_s_hide), contentDescription = "Hide ${item.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+            items(shownEntries, key = { "e/" + CalendarData.entryKey(it) }) { item ->
+                val k = CalendarData.entryKey(item)
+                val dragging = dragKey == "e/$k"
+                val touch = if (settings.allowReorder) Modifier.pointerInput(k, selected) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            dragList = dragList ?: currentEntries
+                            dragKey = "e/$k"
+                            dragDy = 0f
+                            pulse.fire(k)
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            dragDy += amount.y
+                            moveIfNeeded()
+                        },
+                        onDragEnd = { endDrag() },
+                        onDragCancel = { endDrag() }
+                    )
+                } else Modifier
+                PulseBox(
+                    k, Color(item.color), pulse,
+                    Modifier
+                        .zIndex(if (dragging) 1f else 0f)
+                        .graphicsLayer { translationY = if (dragging) dragDy else 0f }
+                        .then(touch)
+                ) {
+                    // A short tap pulses too, as a hint that it can be moved (Tasks/Events also open).
+                    val tapPulse = { if (settings.allowReorder) pulse.fire(k) }
+                    val plan = item.plan
+                    if (plan != null) {
+                        PlanRow(plan, item.planDay, item.done, item.color, planUi, onTouch = tapPulse)
+                    } else {
+                        EntryRow(item, day, today, settings, tf, onTouch = tapPulse,
+                            onDelete = { toDelete = item }, onHide = { toHide = item })
                     }
                 }
             }
@@ -512,7 +612,7 @@ fun CalendarScreen() {
  * Tap to edit, bin to delete (repeating ones ask This day only / All repeats).
  */
 @Composable
-private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: PlanUi) {
+private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: PlanUi, onTouch: () -> Unit = {}) {
     val ctx = LocalContext.current
     val c = Color(color)
     // A past day's entry (also a task without a date ticked on a past day) is read-only unless previous day editing
@@ -534,7 +634,10 @@ private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: P
             Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(6.dp))
-                .then(if (locked) Modifier else Modifier.clickable { ui.edit(item, day) })
+                .clickable {
+                    onTouch()
+                    if (!locked) ui.edit(item, day)
+                }
                 .padding(vertical = 2.dp)
         ) {
             Text(
@@ -556,6 +659,51 @@ private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: P
         if (locked) Spacer(Modifier.size(48.dp)) // Keeps the rows lined up without the bin.
         else IconButton(onClick = { ui.delete(item, day) }) {
             Icon(Icons.Default.Delete, contentDescription = "Delete ${item.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** A TimeBlock or Gmail event in the day list: Its color, name and time; Bin (TimeBlocks) or hide (Gmail). */
+@Composable
+private fun EntryRow(
+    item: DayItem, day: LocalDate, today: LocalDate, settings: com.pantelmg.tb2cal.model.Settings,
+    tf: java.text.DateFormat, onTouch: () -> Unit, onDelete: () -> Unit, onHide: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (settings.allowReorder) Modifier.clickable { onTouch() } else Modifier)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Same 32dp slot as the Task/Event squares, so the colors and the names line up.
+        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(Color(item.color)))
+        }
+        Spacer(Modifier.width(6.dp))
+        Column(Modifier.weight(1f)) {
+            Text(item.label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                if (settings.tbTotal && item.isTimeBlock) "TimeBlock Total"
+                else buildString {
+                    append(if (item.allDay) "All day" else "${tf.format(Date(item.startMs))} – ${tf.format(Date(item.endMs))}")
+                    append(if (item.isTimeBlock) " · TimeBlock" else " · Gmail")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        // TimeBlocks can be deleted; Gmail events are read-only, but can be hidden (Settings).
+        if (item.isTimeBlock) {
+            // A past day's TimeBlocks can be removed only with previous day editing on (Settings).
+            if (!settings.allowPast && day.toEpochDay() < today.toEpochDay()) Spacer(Modifier.size(48.dp))
+            else IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete ${item.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else if (settings.allowHide && item.eventId != null) {
+            IconButton(onClick = onHide) {
+                Icon(painterResource(R.drawable.ic_s_hide), contentDescription = "Hide ${item.label}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

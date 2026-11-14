@@ -103,6 +103,15 @@
         </receiver>
 
         <!-- Widget "+": Add a task or event in a sheet over the home screen. -->
+        <!-- Task/Event manager widget taps (tick, open in the app), without any screen. -->
+        <activity
+            android:name=".ui.WidgetActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.TB2Cal.Translucent" />
+
         <activity
             android:name=".ui.QuickAddActivity"
             android:excludeFromRecents="true"

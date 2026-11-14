@@ -256,6 +256,10 @@ data class Settings(
      * "Set later"); OFF: Only today, current periods and later.
      */
     val allowPast: Boolean = false,
+    /** Task/Event widget: Tapping an entry opens it in the app (Calendar tab, its day, pulsing). */
+    val widgetOpensApp: Boolean = true,
+    /** Day lists can be reordered by touch+hold (kept until Import from your Gmail or TB Total is switched). */
+    val allowReorder: Boolean = true,
     /** Statistics: "TB" (TimeBlocks) or "TE" (Tasks/Events); In Tasks/Events: "TASKS", "EVENTS" or "BOTH". */
     val statsMode: String = "TB",
     val statsItems: String = "BOTH",
@@ -282,7 +286,7 @@ data class Settings(
         .put("accent", accent)
         .put("taskColor", taskColor).put("eventColor", eventColor).put("othersSee", othersSeeCalendar)
         .put("planList", planWidgetList).put("widgetGmailOn", widgetGmail)
-        .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn).put("planDone", planWidgetDone).put("remindBefore", remindBefore).put("allowPast", allowPast)
+        .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn).put("planDone", planWidgetDone).put("remindBefore", remindBefore).put("allowPast", allowPast).put("wOpen", widgetOpensApp).put("reorder", allowReorder)
         .put("statsMode", statsMode).put("statsItems", statsItems)
         .put("dayEntries", dayEntries).put("gmailAccount", gmailAccount).put("allowHide", allowHide)
         .put("holidayOff", org.json.JSONArray().also { a -> holidayOff.forEach { a.put(it) } })
@@ -336,6 +340,8 @@ data class Settings(
             planWidgetDone = o.optString("planDone").ifEmpty { "CROSS" },
             remindBefore = o.optInt("remindBefore", 0),
             allowPast = o.optBoolean("allowPast", false),
+            widgetOpensApp = o.optBoolean("wOpen", true),
+            allowReorder = o.optBoolean("reorder", true),
             statsMode = o.optString("statsMode").ifEmpty { "TB" },
             statsItems = o.optString("statsItems").ifEmpty { "BOTH" },
             gmailAccount = o.optString("gmailAccount"),

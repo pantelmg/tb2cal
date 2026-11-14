@@ -42,13 +42,7 @@ class PlanWidget : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
-            ACTION_TICK -> {
-                Repo.init(context)
-                val id = intent.getStringExtra(EXTRA_ID) ?: return
-                val day = intent.getLongExtra(EXTRA_DAY, -1L).takeIf { it >= 0 }
-                val wasDone = intent.getBooleanExtra(EXTRA_DONE, false)
-                Repo.items.value.firstOrNull { it.id == id }?.let { Plans.setDone(context, it, day, !wasDone) }
-            }
+            ACTION_TICK -> tick(context, intent)
             // An event just ended, or midnight: Redraw (crossed out / removed, back to Today).
             ACTION_REFRESH -> {
                 Repo.init(context)
@@ -106,6 +100,18 @@ class PlanWidget : AppWidgetProvider() {
         const val EXTRA_ID = "id"
         const val EXTRA_DAY = "day"
         const val EXTRA_DONE = "done"
+        /** Row taps (WidgetActionActivity): "tick" a task's square, or "open" the entry in the app. */
+        const val EXTRA_ACT = "act"
+        const val EXTRA_KEY = "key"
+
+        /** Ticks (or unticks) the task a square's tap names. */
+        fun tick(context: Context, intent: Intent) {
+            Repo.init(context)
+            val id = intent.getStringExtra(EXTRA_ID) ?: return
+            val day = intent.getLongExtra(EXTRA_DAY, -1L).takeIf { it >= 0 }
+            val wasDone = intent.getBooleanExtra(EXTRA_DONE, false)
+            Repo.items.value.firstOrNull { it.id == id }?.let { Plans.setDone(context, it, day, !wasDone) }
+        }
 
         fun refresh(ctx: Context) {
             val manager = AppWidgetManager.getInstance(ctx) ?: return
@@ -165,11 +171,12 @@ class PlanWidget : AppWidgetProvider() {
             @Suppress("DEPRECATION")
             v.setRemoteAdapter(R.id.plan_list, svc)
             v.setEmptyView(R.id.plan_list, R.id.plan_empty)
-            // Each task's square fills in its id, day and done state (ticking needs a mutable template).
+            // Each row fills in what its tap does: A task's square ticks it; The rest of the row opens it in the
+            // app (Settings). An invisible activity carries both out (it may open the app; A broadcast may not).
             v.setPendingIntentTemplate(
                 R.id.plan_list,
-                PendingIntent.getBroadcast(
-                    ctx, 43, Intent(ctx, PlanWidget::class.java).setAction(ACTION_TICK),
+                PendingIntent.getActivity(
+                    ctx, 43, Intent(ctx, com.pantelmg.tb2cal.ui.WidgetActionActivity::class.java),
                     PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
             )
@@ -186,6 +193,8 @@ class PlanWidgetService : RemoteViewsService() {
         val title: String, val sub: String?, val color: Int, val taskId: String?, val day: Long?, val crossed: Boolean,
         /** A past day's task with previous day editing off: Not tickable here. */
         val locked: Boolean = false,
+        /** Its entry key (as in the app's day list): For the reordered order, and to open it in the app. */
+        val key: String = "",
     )
 
     private class Factory(private val ctx: Context) : RemoteViewsService.RemoteViewsFactory {
@@ -213,7 +222,7 @@ class PlanWidgetService : RemoteViewsService() {
                 // Open tasks without a date first (from the day each was added onward), then the day's dated/repeating
                 // ones (by time), then the tasks without a date ticked that day.
                 val color = Plans.color(ItemKind.TASK)
-                Plan.openUndatedOn(items, day).forEach { out += Row(it.title, "No date", color, it.id, null, false) }
+                Plan.openUndatedOn(items, day).forEach { out += Row(it.title, "No date", color, it.id, null, false, key = "p:${it.id}") }
                 items.filter { it.kind == ItemKind.TASK && !it.undated }
                     .flatMap { item -> Plan.occurrences(item, day, day + 1).map { item to it } }
                     .filter { (item, d) -> keepDone || d !in item.doneDays }
@@ -221,11 +230,11 @@ class PlanWidgetService : RemoteViewsService() {
                     .forEach { (item, d) ->
                         out += Row(item.title, (listOfNotNull(Plan.timeText(item), Plan.scheduleText(item)) +
                             Plan.honestyNotes(item, d)).joinToString(" · ").ifEmpty { null },
-                            color, item.id, d, d in item.doneDays, locked = locked(d))
+                            color, item.id, d, d in item.doneDays, locked = locked(d), key = "p:${item.id}")
                     }
                 if (keepDone) items.filter { it.undated && it.doneAt?.let { at -> Plan.dayOf(at) } == day }
                     .sortedBy { it.doneAt }
-                    .forEach { out += Row(it.title, null, color, it.id, null, true, locked = locked(day)) }
+                    .forEach { out += Row(it.title, null, color, it.id, null, true, locked = locked(day), key = "p:${it.id}") }
             }
             var nextEnd: Long? = null
             if (st.planWidgetList != "TASKS") {
@@ -240,12 +249,16 @@ class PlanWidgetService : RemoteViewsService() {
                         if (over && !keepDone) return@forEach
                         val time = if (e.allDay) "All day" else "${tf.format(Date(e.startMs))} – ${tf.format(Date(e.endMs))}"
                         val notes = e.plan?.let { Plan.honestyNotes(it, e.planDay) }.orEmpty()
-                        out += Row(e.label, if (e.plan == null) "$time · Gmail" else (listOf(time) + notes).joinToString(" · "), e.color, null, null, over)
+                        out += Row(e.label, if (e.plan == null) "$time · Gmail" else (listOf(time) + notes).joinToString(" · "), e.color, null, null, over,
+                            key = CalendarData.entryKey(e))
                     }
             }
             PlanWidget.scheduleRedraw(ctx, nextEnd)
-            return out
+            shown = day
+            // Reordered in the app (Settings: Allow temporary reordering): The same order here.
+            return if (st.allowReorder) CalendarData.applyOrder(out, Repo.orders.value[day]) { it.key } else out
         }
+        private var shown = 0L
 
         override fun getCount() = rows.size
         override fun getViewTypeCount() = 1
@@ -272,17 +285,25 @@ class PlanWidgetService : RemoteViewsService() {
                 v.setViewVisibility(R.id.row_dot, View.GONE)
                 v.setImageViewResource(R.id.row_tick, if (r.crossed) R.drawable.ic_w_box_done else R.drawable.ic_w_box)
                 v.setInt(R.id.row_tick, "setColorFilter", r.color)
-                // Locked (past day): The tap carries no task, so nothing changes.
-                v.setOnClickFillInIntent(
-                    R.id.row_tick,
-                    if (r.locked) Intent()
-                    else Intent().putExtra(PlanWidget.EXTRA_ID, r.taskId).putExtra(PlanWidget.EXTRA_DAY, r.day ?: -1L)
-                        .putExtra(PlanWidget.EXTRA_DONE, r.crossed)
-                )
+                // Locked (past day): The square isn't tickable; A tap there acts like the rest of the row.
+                if (!r.locked) {
+                    v.setOnClickFillInIntent(
+                        R.id.row_tick,
+                        Intent().putExtra(PlanWidget.EXTRA_ACT, "tick").putExtra(PlanWidget.EXTRA_ID, r.taskId)
+                            .putExtra(PlanWidget.EXTRA_DAY, r.day ?: -1L).putExtra(PlanWidget.EXTRA_DONE, r.crossed)
+                    )
+                }
             } else {
                 v.setViewVisibility(R.id.row_tick, View.GONE)
                 v.setViewVisibility(R.id.row_dot, View.VISIBLE)
                 v.setInt(R.id.row_dot, "setColorFilter", r.color)
+            }
+            // The row: Opens it in the app, on its day, pulsing (Settings: Tapping … shows it in the app).
+            if (Repo.settings.value.widgetOpensApp && r.key.isNotEmpty()) {
+                v.setOnClickFillInIntent(
+                    R.id.row,
+                    Intent().putExtra(PlanWidget.EXTRA_ACT, "open").putExtra(PlanWidget.EXTRA_DAY, shown).putExtra(PlanWidget.EXTRA_KEY, r.key)
+                )
             }
             return v
         }

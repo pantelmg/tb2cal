@@ -71,6 +71,13 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **Gmail events on the Task/Event widget** (on by default): The day's Gmail events also in the widget's Events list
   (with Import from your Gmail on).
 - **Completed on the Task/Event widget:** Crossed out (default) or Removed.
+- **Tapping a task/event on the widget shows it in the app** (ON by default): The Calendar tab opens on its day, with
+  it at the top of the list, pulsing.
+- **Allow temporary reordering** (ON by default): Touch and hold any entry of a day's list (short vibration) to move it
+  up or down; Entries pulse when touched. The order also shows on the month grid, the Calendar widget and the
+  Task/Event widget, and is kept (also after closing the app) until Import from your Gmail (or its account or
+  languages) or TB Total is switched, or this setting is turned OFF: Then every list is back in its normal order. New
+  entries take their normal place among reordered ones.
 - **Allow previous day editing** (OFF by default), for honest records:
   - **OFF:** Past days are read-only: Their TimeBlocks can't be removed (Calendar tab, Statistics), their Tasks/Events
     can't be added, ticked, changed or removed (app and widget), and goals of ended periods can't be set or deleted. New items start from today (a past day's + adds them
