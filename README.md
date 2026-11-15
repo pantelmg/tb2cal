@@ -59,7 +59,7 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
   Events are also saved in TB2Cal's phone calendar.
 - **In the calendars:** Outlined (transparent) entries, in one color for all tasks and one for all events (Settings).
 - **Hide the calendar** (the eye next to the month arrows): The day list takes the page; ‹ › then change the day, and
-  the date (e.g. 15/11/26) takes the month's place. Remembered until tapped again.
+  the date with its weekday (e.g. Sun 15/11/26) takes the month's place. Remembered until tapped again.
 - **Day list:** Tasks have an outlined square to tick (or untick), Events a solid square of the same size (also in
   Statistics and the widget); Tap an entry to edit it, the bin deletes it. For repeating
   ones both ask: This day only, or All repeats.
@@ -75,7 +75,7 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **Completed on the Task/Event widget:** Crossed out (default) or Removed.
 - **Tapping a Task/Event on the widget shows it in the app** (ON by default): The Calendar tab opens on its day, with
   it at the top of the list, pulsing.
-- **Allow temporary reordering** (ON by default): Touch and hold any entry of a day's list (short vibration) to move it
+- **Allow reordering** (ON by default): Touch and hold any entry of a day's list (short vibration) to move it
   up or down (the list scrolls slowly when the entry reaches its top or bottom); Entries pulse when touched. The order
   also shows on the month grid, the Calendar widget and the Task/Event widget, and is kept (also after closing the app
   and when switching Import from your Gmail or TB Total; Missing entries are skipped, new ones take their normal

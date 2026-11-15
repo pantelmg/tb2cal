@@ -60,7 +60,7 @@ object Repo {
         }
     }
 
-    // ---- Reordered day lists (Settings: Allow temporary reordering): Day → entry keys in the chosen order ----
+    // ---- Reordered day lists (Settings: Allow reordering): Day → entry keys in the chosen order ----
     val orders = MutableStateFlow<Map<Long, List<String>>>(emptyMap())
 
     fun setOrder(day: Long, keys: List<String>) {

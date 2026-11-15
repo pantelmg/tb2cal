@@ -255,7 +255,7 @@ class PlanWidgetService : RemoteViewsService() {
             }
             PlanWidget.scheduleRedraw(ctx, nextEnd)
             shown = day
-            // Reordered in the app (Settings: Allow temporary reordering): The same order here.
+            // Reordered in the app (Settings: Allow reordering): The same order here.
             return if (st.allowReorder) CalendarData.applyOrder(out, Repo.orders.value[day]) { it.key } else out
         }
         private var shown = 0L

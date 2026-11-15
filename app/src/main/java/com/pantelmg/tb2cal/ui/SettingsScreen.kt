@@ -506,10 +506,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             )
             RowDivider()
 
-            // Temporary reordering of the day lists (ON by default).
+            // Reordering of the day lists (ON by default).
             SettingRow(
                 icon = rememberVectorPainter(Icons.AutoMirrored.Filled.List),
-                title = "Allow temporary reordering",
+                title = "Allow reordering",
                 subtitle = "Touch and hold any entry of a day's list (short vibration) to move it up or down; Entries " +
                     "pulse when touched. The order also shows on the month grid and the widgets. A reordered day " +
                     "gets a reset arrow next to +Task/Event; Turning this OFF puts every list back in its normal order.",

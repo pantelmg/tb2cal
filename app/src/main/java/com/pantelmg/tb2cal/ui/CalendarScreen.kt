@@ -205,7 +205,7 @@ fun CalendarScreen() {
     }
 
     // TB Total on: Same-name TimeBlocks of a day are shown merged (grid and list).
-    // TB Total, then any reordered days (Settings: Allow temporary reordering), in the grid and the day list.
+    // TB Total, then any reordered days (Settings: Allow reordering), in the grid and the day list.
     val orders by Repo.orders.collectAsState()
     val normalByDay = remember(byDay, settings.tbTotal) { CalendarData.shown(byDay, settings.tbTotal) }
     val shownByDay = remember(normalByDay, orders, settings.allowReorder) {
@@ -263,7 +263,8 @@ fun CalendarScreen() {
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (hidden) LocalDate.ofEpochDay(selected).format(DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH))
+                // Calendar hidden: The day with its weekday (e.g. Sun 15/11/26), since there's no grid to show it.
+                if (hidden) LocalDate.ofEpochDay(selected).format(DateTimeFormatter.ofPattern("EEE dd/MM/yy", Locale.ENGLISH))
                 else month.format(DateTimeFormatter.ofPattern("LLLL", locale)).replaceFirstChar { it.uppercase() } +
                     if (month.year != today.year) " ${month.year}" else "",
                 style = MaterialTheme.typography.titleLarge,
