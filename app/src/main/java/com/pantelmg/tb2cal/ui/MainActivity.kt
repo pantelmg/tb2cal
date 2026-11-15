@@ -141,9 +141,10 @@ class MainActivity : ComponentActivity() {
             ACTION_OPEN_COMPLETION -> navRequest.value = Screen.COMPLETION
             ACTION_OPEN_MAIN -> go(Screen.MAIN)
             ACTION_OPEN_CALENDAR_DAY -> {
-                CalendarNav.day.value = i?.getLongExtra(EXTRA_EPOCH_DAY, LocalDate.now().toEpochDay()) ?: LocalDate.now().toEpochDay()
+                val d = i?.getLongExtra(EXTRA_EPOCH_DAY, LocalDate.now().toEpochDay()) ?: LocalDate.now().toEpochDay()
+                CalendarNav.day.value = d
                 // From the Task/Event widget: That entry at the top of the day's list, pulsing.
-                CalendarNav.focus.value = i?.getStringExtra(EXTRA_FOCUS)
+                CalendarNav.focus.value = i?.getStringExtra(EXTRA_FOCUS)?.let { d to it }
                 go(Screen.CALENDAR)
             }
             ACTION_OPEN_STATS_DAY -> {

@@ -102,8 +102,8 @@ import java.util.Locale
 /** A day to open in the Calendar tab (set by the Calendar widget). */
 object CalendarNav {
     val day = MutableStateFlow<Long?>(null)
-    /** An entry to show (widget tap): Scrolled to the top of its day's list, pulsing. Its entry key. */
-    val focus = MutableStateFlow<String?>(null)
+    /** An entry to show (widget tap): Its day and entry key; Scrolled to the top of that day's list, pulsing. */
+    val focus = MutableStateFlow<Pair<Long, String>?>(null)
 }
 
 /**
@@ -126,9 +126,11 @@ private fun PulseBox(key: String, color: Color, pulse: Pulse, modifier: Modifier
     val a = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(pulse.n) {
         if (pulse.n > pulse.played && pulse.key == key) {
-            pulse.played = pulse.n
             a.animateTo(1f, androidx.compose.animation.core.tween(220))
             a.animateTo(0f, androidx.compose.animation.core.tween(520))
+            pulse.played = pulse.n // Only once it has been seen in full.
+        } else if (a.value != 0f) {
+            a.snapTo(0f) // Another entry's pulse cut this one off: No tint left behind.
         }
     }
     Box(
@@ -453,28 +455,35 @@ fun CalendarScreen() {
         fun moveIfNeeded() {
             val list = dragList ?: return
             val k = dragKey ?: return
+            val from = list.indexOfFirst { keyOf(it) == k }
+            if (from < 0) return
             val visible = listState.layoutInfo.visibleItemsInfo
             val cur = visible.firstOrNull { it.key == k } ?: return
-            val center = fingerY - grabY + cur.size / 2f
-            val target = visible.firstOrNull { v ->
-                v.key != k && (v.key as? String)?.startsWith("e/") == true &&
-                    center >= v.offset && center < v.offset + v.size
-            } ?: return
-            val from = list.indexOfFirst { keyOf(it) == k }
-            val to = list.indexOfFirst { keyOf(it) == target.key }
-            if (from < 0 || to < 0) return
-            // The list keeps its first visible entry in place (or it would follow the moved one).
-            val firstIndex = listState.firstVisibleItemIndex
+            // The list hasn't laid out the last move yet: Decide on the next frame (never on stale positions).
+            if (cur.index != from) return
+            val top = fingerY - grabY
+            val bottom = top + cur.size
+            // Swap with a neighbour once the dragged entry covers half of it. After the swap, the way back needs
+            // the same half the other way, so entries of any height never flip back and forth.
+            val below = list.getOrNull(from + 1)?.let { n -> visible.firstOrNull { it.key == keyOf(n) } }
+            val above = list.getOrNull(from - 1)?.let { p -> visible.firstOrNull { it.key == keyOf(p) } }
+            val to = when {
+                below != null && bottom > below.offset + below.size / 2f -> from + 1
+                above != null && top < above.offset + above.size / 2f -> from - 1
+                else -> return
+            }
+            // The list keeps its first visible entry in place (or it would follow the moved one): Same frame.
+            val first = listState.firstVisibleItemIndex
             val firstOffset = listState.firstVisibleItemScrollOffset
             dragList = list.toMutableList().apply { add(to, removeAt(from)) }
-            if (from == firstIndex || to == firstIndex) scope.launch { listState.scrollToItem(firstIndex, firstOffset) }
+            if (from == first || to == first) listState.requestScrollToItem(first, firstOffset)
         }
         fun endDrag() {
             dragList?.let { l -> Repo.setOrder(selected, l.map { CalendarData.entryKey(it) }) }
             dragList = null
             dragKey = null
         }
-        // Slow scroll while dragging near an edge (every frame, the same speed on any screen refresh rate).
+        // While dragging, every frame: Slow scroll near an edge (same speed on any refresh rate), and moves settle.
         LaunchedEffect(dragKey != null) {
             if (dragKey == null) return@LaunchedEffect
             var last = 0L
@@ -490,19 +499,28 @@ fun CalendarScreen() {
                     else -> 0f
                 }
                 if (depth != 0f && dt > 0f) {
-                    // A scroll step can be interrupted (the list put back in place after a move): Just go on.
+                    // A scroll step can be interrupted: Just go on.
                     try {
                         listState.scrollBy(depth * maxSpeedPx * dt)
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     }
-                    moveIfNeeded()
                 }
+                // Every frame (also with the finger still): Finishes any move a fast drag left half-way.
+                moveIfNeeded()
             }
         }
 
-        // Opened from the widget: Its entry at the top of the list, pulsing.
+        // Opened from the widget: Its entry at the top of its day's list, pulsing once the screen is really shown
+        // (opening the app animates first, which would hide it).
         val focus by CalendarNav.focus.collectAsState()
+        var pendingPulse by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(focus, selected, entries) {
+            val (fDay, fKey) = focus ?: return@LaunchedEffect
+            if (fDay != selected || entries.none { CalendarData.entryKey(it) == fKey }) return@LaunchedEffect
+            pendingPulse = fKey
+            CalendarNav.focus.value = null
+        }
         LaunchedEffect(focus) {
             // Not found within a moment (e.g. it was just deleted): Forget it.
             if (focus != null) {
@@ -510,14 +528,17 @@ fun CalendarScreen() {
                 CalendarNav.focus.value = null
             }
         }
-        LaunchedEffect(focus, entries) {
-            val k = focus ?: return@LaunchedEffect
+        val lifecycle = (ctx as? androidx.lifecycle.LifecycleOwner)?.lifecycle
+        LaunchedEffect(pendingPulse) {
+            val k = pendingPulse ?: return@LaunchedEffect
             val i = entries.indexOfFirst { CalendarData.entryKey(it) == k }
-            if (i >= 0) {
-                runCatching { listState.scrollToItem(i) }
-                pulse.fire(k)
-                CalendarNav.focus.value = null
+            if (i >= 0) runCatching { listState.scrollToItem(i) }
+            while (lifecycle != null && !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                kotlinx.coroutines.delay(40)
             }
+            kotlinx.coroutines.delay(350)
+            pulse.fire(k)
+            pendingPulse = null
         }
 
         val listDrag = if (settings.allowReorder) Modifier.pointerInput(selected) {
