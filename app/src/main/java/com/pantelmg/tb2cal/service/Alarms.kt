@@ -95,7 +95,7 @@ class AlarmReceiver : BroadcastReceiver() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         KeepAlive.revive(context)
-        // Alarms don't survive a reboot: Re-arm the next task/event reminder too.
+        // Alarms don't survive a reboot: Re-arm the next Task/Event reminder too.
         runCatching {
             com.pantelmg.tb2cal.data.Repo.init(context)
             com.pantelmg.tb2cal.plan.Reminders.schedule(context)

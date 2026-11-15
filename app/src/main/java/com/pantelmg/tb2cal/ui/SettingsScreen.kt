@@ -494,10 +494,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             )
             RowDivider()
 
-            // Tapping a task/event on the widget: Shows it in the app (ON by default).
+            // Tapping a Task/Event on the widget: Shows it in the app (ON by default).
             SettingRow(
                 icon = painterResource(R.drawable.ic_w_list_both),
-                title = "Tapping a task/event on the widget shows it in the app",
+                title = "Tapping a Task/Event on the widget shows it in the app",
                 subtitle = "Opens the Calendar tab on its day, with it at the top of the list, pulsing.",
                 onClick = { Repo.updateSettings { it.copy(widgetOpensApp = !it.widgetOpensApp) } },
                 trailing = {

@@ -71,7 +71,7 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **Gmail events on the Task/Event widget** (on by default): The day's Gmail events also in the widget's Events list
   (with Import from your Gmail on).
 - **Completed on the Task/Event widget:** Crossed out (default) or Removed.
-- **Tapping a task/event on the widget shows it in the app** (ON by default): The Calendar tab opens on its day, with
+- **Tapping a Task/Event on the widget shows it in the app** (ON by default): The Calendar tab opens on its day, with
   it at the top of the list, pulsing.
 - **Allow temporary reordering** (ON by default): Touch and hold any entry of a day's list (short vibration) to move it
   up or down; Entries pulse when touched. The order also shows on the month grid, the Calendar widget and the

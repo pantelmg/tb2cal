@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
@@ -88,6 +90,7 @@ import com.pantelmg.tb2cal.reliability.Reliability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -103,26 +106,29 @@ object CalendarNav {
     val focus = MutableStateFlow<String?>(null)
 }
 
-/** Which entry pulses, and a counter so the same one can pulse again. */
+/**
+ * Which entry pulses: Each [fire] is played once ([played]), so an entry scrolled out and back in, or recreated,
+ * doesn't pulse again.
+ */
 class Pulse {
     var key by mutableStateOf<String?>(null)
     var n by mutableIntStateOf(0)
+    var played = 0
     fun fire(k: String) {
         key = k
         n++
     }
 }
 
-/** Pulses its content's background (twice) when [pulse] fires for [key]. */
+/** Pulses its content's background once when [pulse] fires for [key]. */
 @Composable
 private fun PulseBox(key: String, color: Color, pulse: Pulse, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val a = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(pulse.n) {
-        if (pulse.n > 0 && pulse.key == key) {
-            repeat(2) {
-                a.animateTo(1f, androidx.compose.animation.core.tween(200))
-                a.animateTo(0f, androidx.compose.animation.core.tween(380))
-            }
+        if (pulse.n > pulse.played && pulse.key == key) {
+            pulse.played = pulse.n
+            a.animateTo(1f, androidx.compose.animation.core.tween(220))
+            a.animateTo(0f, androidx.compose.animation.core.tween(520))
         }
     }
     Box(
@@ -431,32 +437,68 @@ fun CalendarScreen() {
         }
         val currentEntries by rememberUpdatedState(entries)
         // Touch+hold an entry to move it (pulse + short vibration); The order is saved for this day when let go.
+        // The dragged entry is drawn where the finger is (from its position, not added-up moves), so it can't drift;
+        // Holding it near the list's top or bottom edge scrolls slowly, faster the closer to the edge.
         var dragList by remember { mutableStateOf<List<DayItem>?>(null) }
         var dragKey by remember { mutableStateOf<String?>(null) }
-        var dragDy by remember { mutableFloatStateOf(0f) }
+        var fingerY by remember { mutableFloatStateOf(0f) }
+        var grabY by remember { mutableFloatStateOf(0f) }
         val shownEntries = dragList ?: entries
         val listState = rememberLazyListState()
         val haptic = LocalHapticFeedback.current
+        val density = LocalDensity.current
+        val edgePx = with(density) { 56.dp.toPx() }
+        val maxSpeedPx = with(density) { 420.dp.toPx() } // Per second, at the very edge.
+        fun keyOf(i: DayItem) = "e/" + CalendarData.entryKey(i)
         fun moveIfNeeded() {
             val list = dragList ?: return
+            val k = dragKey ?: return
             val visible = listState.layoutInfo.visibleItemsInfo
-            val cur = visible.firstOrNull { it.key == dragKey } ?: return
-            val center = cur.offset + dragDy + cur.size / 2f
+            val cur = visible.firstOrNull { it.key == k } ?: return
+            val center = fingerY - grabY + cur.size / 2f
             val target = visible.firstOrNull { v ->
-                v.key != dragKey && v.key is String && (v.key as String).startsWith("e/") &&
+                v.key != k && (v.key as? String)?.startsWith("e/") == true &&
                     center >= v.offset && center < v.offset + v.size
             } ?: return
-            val from = list.indexOfFirst { "e/" + CalendarData.entryKey(it) == dragKey }
-            val to = list.indexOfFirst { "e/" + CalendarData.entryKey(it) == target.key }
+            val from = list.indexOfFirst { keyOf(it) == k }
+            val to = list.indexOfFirst { keyOf(it) == target.key }
             if (from < 0 || to < 0) return
+            // The list keeps its first visible entry in place (or it would follow the moved one).
+            val firstIndex = listState.firstVisibleItemIndex
+            val firstOffset = listState.firstVisibleItemScrollOffset
             dragList = list.toMutableList().apply { add(to, removeAt(from)) }
-            dragDy += (cur.offset - target.offset).toFloat()
+            if (from == firstIndex || to == firstIndex) scope.launch { listState.scrollToItem(firstIndex, firstOffset) }
         }
         fun endDrag() {
             dragList?.let { l -> Repo.setOrder(selected, l.map { CalendarData.entryKey(it) }) }
             dragList = null
             dragKey = null
-            dragDy = 0f
+        }
+        // Slow scroll while dragging near an edge (every frame, the same speed on any screen refresh rate).
+        LaunchedEffect(dragKey != null) {
+            if (dragKey == null) return@LaunchedEffect
+            var last = 0L
+            while (dragKey != null) {
+                val now = withFrameNanos { it }
+                val dt = if (last == 0L) 0f else (now - last) / 1_000_000_000f
+                last = now
+                val info = listState.layoutInfo
+                val height = (info.viewportEndOffset - info.viewportStartOffset).toFloat()
+                val depth = when {
+                    fingerY < edgePx -> -(edgePx - fingerY.coerceAtLeast(0f)) / edgePx
+                    fingerY > height - edgePx -> (fingerY.coerceAtMost(height) - (height - edgePx)) / edgePx
+                    else -> 0f
+                }
+                if (depth != 0f && dt > 0f) {
+                    // A scroll step can be interrupted (the list put back in place after a move): Just go on.
+                    try {
+                        listState.scrollBy(depth * maxSpeedPx * dt)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    }
+                    moveIfNeeded()
+                }
+            }
         }
 
         // Opened from the widget: Its entry at the top of the list, pulsing.
@@ -478,7 +520,30 @@ fun CalendarScreen() {
             }
         }
 
-        LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth(), state = listState) {
+        val listDrag = if (settings.allowReorder) Modifier.pointerInput(selected) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { at ->
+                    val hit = listState.layoutInfo.visibleItemsInfo.firstOrNull { v ->
+                        (v.key as? String)?.startsWith("e/") == true && at.y >= v.offset && at.y < v.offset + v.size
+                    } ?: return@detectDragGesturesAfterLongPress
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    dragList = currentEntries
+                    dragKey = hit.key as String
+                    fingerY = at.y
+                    grabY = at.y - hit.offset
+                    pulse.fire((hit.key as String).removePrefix("e/"))
+                },
+                onDrag = { change, _ ->
+                    if (dragKey == null) return@detectDragGesturesAfterLongPress
+                    change.consume()
+                    fingerY = change.position.y
+                    moveIfNeeded()
+                },
+                onDragEnd = { endDrag() },
+                onDragCancel = { endDrag() }
+            )
+        } else Modifier
+        LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth().then(listDrag), state = listState) {
             if (shownEntries.isEmpty()) {
                 item(key = "empty") {
                     Text(
@@ -488,33 +553,21 @@ fun CalendarScreen() {
                     )
                 }
             }
-            items(shownEntries, key = { "e/" + CalendarData.entryKey(it) }) { item ->
+            items(shownEntries, key = { keyOf(it) }) { item ->
                 val k = CalendarData.entryKey(item)
-                val dragging = dragKey == "e/$k"
-                val touch = if (settings.allowReorder) Modifier.pointerInput(k, selected) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            dragList = dragList ?: currentEntries
-                            dragKey = "e/$k"
-                            dragDy = 0f
-                            pulse.fire(k)
-                        },
-                        onDrag = { change, amount ->
-                            change.consume()
-                            dragDy += amount.y
-                            moveIfNeeded()
-                        },
-                        onDragEnd = { endDrag() },
-                        onDragCancel = { endDrag() }
-                    )
-                } else Modifier
+                val listKey = "e/$k"
+                val dragging = dragKey == listKey
                 PulseBox(
                     k, Color(item.color), pulse,
                     Modifier
                         .zIndex(if (dragging) 1f else 0f)
-                        .graphicsLayer { translationY = if (dragging) dragDy else 0f }
-                        .then(touch)
+                        .graphicsLayer {
+                            // Under the finger: Where it was grabbed, wherever the list has put the entry.
+                            translationY = if (!dragging) 0f else {
+                                val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == listKey }
+                                if (info == null) 0f else fingerY - grabY - info.offset
+                            }
+                        }
                 ) {
                     // A short tap pulses too, as a hint that it can be moved (Tasks/Events also open).
                     val tapPulse = { if (settings.allowReorder) pulse.fire(k) }
