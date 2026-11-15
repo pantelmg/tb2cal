@@ -33,7 +33,7 @@ preferences.
 
 ## Calendar tab
 - Month view of your completed TimeBlocks, 3, 4 or 5 per day (Settings). Tap a day to see its list, under its short
-  date (e.g. `Mon 15/12/26`).
+  date (e.g. `15/12/26`).
 - **TB Total ON/OFF** (OFF by default, remembered): Merges same-name TimeBlocks of a day into one
   total, in the order of the first of each name, in the grid, the list (marked *TimeBlock Total*) and the widget.
 - The bin next to a TimeBlock deletes it from the app and from TB2Cal's phone calendar (after you confirm). On a
@@ -58,6 +58,8 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **Event:** Its name, date, all day or from–to times, and Repeat…. It counts as completed once its time is over.
   Events are also saved in TB2Cal's phone calendar.
 - **In the calendars:** Outlined (transparent) entries, in one color for all tasks and one for all events (Settings).
+- **Hide the calendar** (the eye next to the month arrows): The day list takes the page; ‹ › then change the day, and
+  the date (e.g. 15/11/26) takes the month's place. Remembered until tapped again.
 - **Day list:** Tasks have an outlined square to tick (or untick), Events a solid square of the same size (also in
   Statistics and the widget); Tap an entry to edit it, the bin deletes it. For repeating
   ones both ask: This day only, or All repeats.
@@ -74,10 +76,11 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 - **Tapping a Task/Event on the widget shows it in the app** (ON by default): The Calendar tab opens on its day, with
   it at the top of the list, pulsing.
 - **Allow temporary reordering** (ON by default): Touch and hold any entry of a day's list (short vibration) to move it
-  up or down; Entries pulse when touched. The order also shows on the month grid, the Calendar widget and the
-  Task/Event widget, and is kept (also after closing the app) until Import from your Gmail (or its account or
-  languages) or TB Total is switched, or this setting is turned OFF: Then every list is back in its normal order. New
-  entries take their normal place among reordered ones.
+  up or down (the list scrolls slowly when the entry reaches its top or bottom); Entries pulse when touched. The order
+  also shows on the month grid, the Calendar widget and the Task/Event widget, and is kept (also after closing the app
+  and when switching Import from your Gmail or TB Total; Missing entries are skipped, new ones take their normal
+  place). A reordered day gets a **reset arrow** left of +Task/Event (it asks first; Dragging back into the normal order
+  removes it too). Turning this setting OFF puts every list back in its normal order.
 - **Allow previous day editing** (OFF by default), for honest records:
   - **OFF:** Past days are read-only: Their TimeBlocks can't be removed (Calendar tab, Statistics), their Tasks/Events
     can't be added, ticked, changed or removed (app and widget), and goals of ended periods can't be set or deleted. New items start from today (a past day's + adds them

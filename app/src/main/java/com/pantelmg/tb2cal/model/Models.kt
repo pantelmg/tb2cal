@@ -258,8 +258,10 @@ data class Settings(
     val allowPast: Boolean = false,
     /** Task/Event widget: Tapping an entry opens it in the app (Calendar tab, its day, pulsing). */
     val widgetOpensApp: Boolean = true,
-    /** Day lists can be reordered by touch+hold (kept until Import from your Gmail or TB Total is switched). */
+    /** Day lists can be reordered by touch+hold (kept until that day is reset, or this is turned off). */
     val allowReorder: Boolean = true,
+    /** Calendar tab: The month grid hidden (the eye), so the day list takes the page; ‹ › then change the day. */
+    val calendarHidden: Boolean = false,
     /** Statistics: "TB" (TimeBlocks) or "TE" (Tasks/Events); In Tasks/Events: "TASKS", "EVENTS" or "BOTH". */
     val statsMode: String = "TB",
     val statsItems: String = "BOTH",
@@ -286,7 +288,7 @@ data class Settings(
         .put("accent", accent)
         .put("taskColor", taskColor).put("eventColor", eventColor).put("othersSee", othersSeeCalendar)
         .put("planList", planWidgetList).put("widgetGmailOn", widgetGmail)
-        .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn).put("planDone", planWidgetDone).put("remindBefore", remindBefore).put("allowPast", allowPast).put("wOpen", widgetOpensApp).put("reorder", allowReorder)
+        .put("planDay", planWidgetDay).put("planDayOn", planWidgetDaySetOn).put("planDone", planWidgetDone).put("remindBefore", remindBefore).put("allowPast", allowPast).put("wOpen", widgetOpensApp).put("reorder", allowReorder).put("calHidden", calendarHidden)
         .put("statsMode", statsMode).put("statsItems", statsItems)
         .put("dayEntries", dayEntries).put("gmailAccount", gmailAccount).put("allowHide", allowHide)
         .put("holidayOff", org.json.JSONArray().also { a -> holidayOff.forEach { a.put(it) } })
@@ -342,6 +344,7 @@ data class Settings(
             allowPast = o.optBoolean("allowPast", false),
             widgetOpensApp = o.optBoolean("wOpen", true),
             allowReorder = o.optBoolean("reorder", true),
+            calendarHidden = o.optBoolean("calHidden", false),
             statsMode = o.optString("statsMode").ifEmpty { "TB" },
             statsItems = o.optString("statsItems").ifEmpty { "BOTH" },
             gmailAccount = o.optString("gmailAccount"),

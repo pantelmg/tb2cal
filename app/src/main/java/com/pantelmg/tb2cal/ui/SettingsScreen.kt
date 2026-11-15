@@ -511,8 +511,8 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
                 icon = rememberVectorPainter(Icons.AutoMirrored.Filled.List),
                 title = "Allow temporary reordering",
                 subtitle = "Touch and hold any entry of a day's list (short vibration) to move it up or down; Entries " +
-                    "pulse when touched. The order also shows on the month grid and the widgets. Switching Import " +
-                    "from your Gmail or TB Total puts every list back in its normal order.",
+                    "pulse when touched. The order also shows on the month grid and the widgets. A reordered day " +
+                    "gets a reset arrow next to +Task/Event; Turning this OFF puts every list back in its normal order.",
                 onClick = { Repo.updateSettings { it.copy(allowReorder = !it.allowReorder) } },
                 trailing = {
                     Switch(checked = settings.allowReorder, onCheckedChange = { v -> Repo.updateSettings { it.copy(allowReorder = v) } })

@@ -74,6 +74,17 @@ object Repo {
         changed()
     }
 
+    /** One day back to its normal order. */
+    fun clearOrder(day: Long) {
+        synchronized(lock) {
+            if (day !in orders.value) return
+            val m = orders.value - day
+            orders.value = m
+            writeOrders(m)
+        }
+        changed()
+    }
+
     /** Back to the normal order everywhere. */
     fun clearOrders() {
         synchronized(lock) {
@@ -154,10 +165,9 @@ object Repo {
             val s = f(old)
             settings.value = s
             sp.edit().putString("settings", s.toJson().toString()).apply()
-            // Settings that change which entries the lists hold put every reordered list back in its normal order.
-            if (old.gmailView != s.gmailView || old.tbTotal != s.tbTotal || old.gmailAccount != s.gmailAccount ||
-                old.holidayOff != s.holidayOff || (old.allowReorder && !s.allowReorder)
-            ) clearOrders()
+            // Turning reordering off puts every list back in its normal order. (Other switches, like Import from your
+            // Gmail or TB Total, keep the orders: Missing entries are skipped, new ones take their normal place.)
+            if (old.allowReorder && !s.allowReorder) clearOrders()
         }
         changed()
     }

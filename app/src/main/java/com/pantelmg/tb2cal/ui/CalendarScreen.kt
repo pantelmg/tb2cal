@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableFloatStateOf
@@ -162,6 +163,8 @@ fun CalendarScreen() {
     var monthOffset by rememberSaveable { mutableIntStateOf(0) }
     var selected by rememberSaveable { mutableLongStateOf(today.toEpochDay()) }
     var toDelete by remember { mutableStateOf<DayItem?>(null) }
+    // The reset arrow asks first.
+    var askReset by remember { mutableStateOf(false) }
     val requested by CalendarNav.day.collectAsState()
     LaunchedEffect(requested) {
         requested?.let { d ->
@@ -204,8 +207,9 @@ fun CalendarScreen() {
     // TB Total on: Same-name TimeBlocks of a day are shown merged (grid and list).
     // TB Total, then any reordered days (Settings: Allow temporary reordering), in the grid and the day list.
     val orders by Repo.orders.collectAsState()
-    val shownByDay = remember(byDay, settings.tbTotal, orders, settings.allowReorder) {
-        CalendarData.ordered(CalendarData.shown(byDay, settings.tbTotal), orders, settings.allowReorder)
+    val normalByDay = remember(byDay, settings.tbTotal) { CalendarData.shown(byDay, settings.tbTotal) }
+    val shownByDay = remember(normalByDay, orders, settings.allowReorder) {
+        CalendarData.ordered(normalByDay, orders, settings.allowReorder)
     }
 
     val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -248,29 +252,54 @@ fun CalendarScreen() {
             )
         }
 
-        // ---- Month header ----
+        // ---- Month header (calendar shown) / Day header (calendar hidden) ----
+        // The eye hides the month grid so the day list takes the page; Then ‹ › change the day, and the date takes
+        // the month's place. Remembered (Settings).
+        val hidden = settings.calendarHidden
+        fun showDay(d: Long) {
+            selected = d
+            val ld = LocalDate.ofEpochDay(d)
+            monthOffset = (ld.year - today.year) * 12 + (ld.monthValue - today.monthValue)
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                month.format(DateTimeFormatter.ofPattern("LLLL", locale)).replaceFirstChar { it.uppercase() } +
+                if (hidden) LocalDate.ofEpochDay(selected).format(DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH))
+                else month.format(DateTimeFormatter.ofPattern("LLLL", locale)).replaceFirstChar { it.uppercase() } +
                     if (month.year != today.year) " ${month.year}" else "",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
                 modifier = Modifier.weight(1f)
             )
-            if (monthOffset != 0) {
+            if (if (hidden) selected != today.toEpochDay() else monthOffset != 0) {
                 TextButton(onClick = {
                     monthOffset = 0
                     selected = today.toEpochDay()
                 }) { Text("Today") }
             }
-            IconButton(onClick = { monthOffset-- }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous month")
+            IconButton(onClick = { if (hidden) showDay(selected - 1) else monthOffset-- }) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = if (hidden) "Previous day" else "Previous month")
             }
-            IconButton(onClick = { monthOffset++ }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next month")
+            IconButton(onClick = { if (hidden) showDay(selected + 1) else monthOffset++ }) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = if (hidden) "Next day" else "Next month")
+            }
+            IconButton(onClick = {
+                // Hiding: The grid shows the selected day's month again when it comes back.
+                if (!hidden) showDay(selected)
+                Repo.updateSettings { it.copy(calendarHidden = !it.calendarHidden) }
+            }) {
+                Icon(
+                    painterResource(if (hidden) R.drawable.ic_s_show else R.drawable.ic_s_hide),
+                    contentDescription = if (hidden) "Show the calendar" else "Hide the calendar",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
+        // Entries per day (Settings): 3 or 4 fit the usual grid; 5 gets a taller grid (and a shorter day list).
+        val perDay = settings.dayEntries.coerceIn(3, 5)
+        val gridShare = if (perDay == 5) 0.76f else 0.66f
+        if (!hidden) {
         // ---- Weekday letters ----
         Row(Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
             for (i in 0 until 7) {
@@ -288,9 +317,6 @@ fun CalendarScreen() {
         // Each cell: Day number (with +N at the right when more) on top, then up to 3 TimeBlocks/events.
         // Sizes come from the cell height (not the phone's font size), so all of it always fits.
         val line = MaterialTheme.colorScheme.outlineVariant
-        // Entries per day (Settings): 3 or 4 fit the usual grid; 5 gets a taller grid (and a shorter day list).
-        val perDay = settings.dayEntries.coerceIn(3, 5)
-        val gridShare = if (perDay == 5) 0.76f else 0.66f
         BoxWithConstraints(Modifier.weight(gridShare).fillMaxWidth()) {
         val density = LocalDensity.current
         val cellH = maxHeight / 6
@@ -380,26 +406,63 @@ fun CalendarScreen() {
         }
         }
 
+        } // (calendar shown)
+
         // ---- Chosen day ----
         val day = LocalDate.ofEpochDay(selected)
-        val dayItems = shownByDay[day].orEmpty()
+        // The day's entries in their normal order (the list applies any reordering itself, below).
+        val dayItems = normalByDay[day].orEmpty()
         val tf = DateFormat.getTimeFormat(ctx)
-        // Short date (e.g. Mon 15/12/26) and, on the other side, the TB Total switch (crossed out when off).
+        // Only this list scrolls (and only if it doesn't fit). It starts with the open tasks that have no date (from the
+        // day each was added onward), then the day's entries; With reordering on, in the chosen order.
+        val undatedOpen = remember(planItems, selected) { Plan.openUndatedOn(planItems, selected) }
+        val taskColor = Plans.color(ItemKind.TASK)
+        val natural = remember(undatedOpen, dayItems, selected) {
+            undatedOpen.map { t ->
+                DayItem(t.title, taskColor, 0L, 0L, allDay = true, isTimeBlock = false, plan = t, planDay = null)
+            }.plus(dayItems).distinctBy { CalendarData.entryKey(it) } // (Each entry once: The list needs unique keys.)
+        }
+        val entries = remember(natural, orders, settings.allowReorder, selected) {
+            if (settings.allowReorder) CalendarData.applyOrder(natural, orders[selected]) { CalendarData.entryKey(it) } else natural
+        }
+        // The reset arrow shows only while this day's list differs from its normal order.
+        val dayReordered = settings.allowReorder && entries.map { CalendarData.entryKey(it) } != natural.map { CalendarData.entryKey(it) }
+        val currentNatural by rememberUpdatedState(natural)
+        // Date (e.g. 15/12/26; With the calendar hidden it's up in the header), then the reset arrow (a reordered
+        // day), +Task/Event and TB Total.
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                day.format(DateTimeFormatter.ofPattern("EEE dd/MM/yy", Locale.ENGLISH)),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.weight(1f)
-            )
+            if (!hidden) {
+                Text(
+                    day.format(DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH)),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+            Spacer(Modifier.weight(1f))
             val boxShape = RoundedCornerShape(10.dp)
+            if (dayReordered) {
+                Box(
+                    Modifier
+                        .clip(boxShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
+                        .clickable { askReset = true }
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_s_reset), contentDescription = "Back to the normal order",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+            }
             // +Task/Event: Same style as TB Total, fixed size, just left of it.
             Box(
                 Modifier
@@ -427,16 +490,6 @@ fun CalendarScreen() {
                 Text(if (on) "TB Total ON" else "TB Total OFF", style = MaterialTheme.typography.titleSmall, color = tint)
             }
         }
-        // Only this list scrolls (and only if it doesn't fit). It starts with the open tasks that have no date (from the
-        // day each was added onward), then the day's entries; With reordering on, in the chosen order.
-        val undatedOpen = remember(planItems, selected) { Plan.openUndatedOn(planItems, selected) }
-        val taskColor = Plans.color(ItemKind.TASK)
-        val entries = remember(undatedOpen, dayItems, orders, settings.allowReorder, selected) {
-            val all = undatedOpen.map { t ->
-                DayItem(t.title, taskColor, 0L, 0L, allDay = true, isTimeBlock = false, plan = t, planDay = null)
-            }.plus(dayItems).distinctBy { CalendarData.entryKey(it) } // (Each entry once: The list needs unique keys.)
-            if (settings.allowReorder) CalendarData.applyOrder(all, orders[selected]) { CalendarData.entryKey(it) } else all
-        }
         val currentEntries by rememberUpdatedState(entries)
         // Touch+hold an entry to move it (pulse + short vibration); The order is saved for this day when let go.
         // The dragged entry is drawn where the finger is (from its position, not added-up moves), so it can't drift;
@@ -445,6 +498,10 @@ fun CalendarScreen() {
         var dragKey by remember { mutableStateOf<String?>(null) }
         var fingerY by remember { mutableFloatStateOf(0f) }
         var grabY by remember { mutableFloatStateOf(0f) }
+        var dragMoved by remember { mutableStateOf(false) }
+        // Let go: The entry glides from under the finger into its place (no snap).
+        var dropKey by remember { mutableStateOf<String?>(null) }
+        val dropY = remember { androidx.compose.animation.core.Animatable(0f) }
         val shownEntries = dragList ?: entries
         val listState = rememberLazyListState()
         val haptic = LocalHapticFeedback.current
@@ -479,9 +536,25 @@ fun CalendarScreen() {
             if (from == first || to == first) listState.requestScrollToItem(first, firstOffset)
         }
         fun endDrag() {
-            dragList?.let { l -> Repo.setOrder(selected, l.map { CalendarData.entryKey(it) }) }
+            val k = dragKey
+            val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == k }
+            if (k != null && info != null) {
+                val from = fingerY - grabY - info.offset
+                dropKey = k
+                scope.launch {
+                    dropY.snapTo(from)
+                    dropY.animateTo(0f, androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow))
+                    if (dropKey == k) dropKey = null
+                }
+            }
+            dragList?.let { l ->
+                val keys = l.map { CalendarData.entryKey(it) }
+                // Dragged back into the normal order: Nothing to keep (the reset arrow goes).
+                if (keys == currentNatural.map { CalendarData.entryKey(it) }) Repo.clearOrder(selected) else Repo.setOrder(selected, keys)
+            }
             dragList = null
             dragKey = null
+            dragMoved = false
         }
         // While dragging, every frame: Slow scroll near an edge (same speed on any refresh rate), and moves settle.
         LaunchedEffect(dragKey != null) {
@@ -493,9 +566,15 @@ fun CalendarScreen() {
                 last = now
                 val info = listState.layoutInfo
                 val height = (info.viewportEndOffset - info.viewportStartOffset).toFloat()
+                // By the dragged entry's own edges (not the finger): Wherever it was grabbed, it scrolls when the
+                // entry reaches the top or bottom of the list. Only once it's been moved.
+                val size = info.visibleItemsInfo.firstOrNull { it.key == dragKey }?.size ?: 0
+                val top = fingerY - grabY
+                val bottom = top + size
                 val depth = when {
-                    fingerY < edgePx -> -(edgePx - fingerY.coerceAtLeast(0f)) / edgePx
-                    fingerY > height - edgePx -> (fingerY.coerceAtMost(height) - (height - edgePx)) / edgePx
+                    !dragMoved -> 0f
+                    top < edgePx -> -((edgePx - top) / edgePx).coerceIn(0f, 1f)
+                    bottom > height - edgePx -> ((bottom - (height - edgePx)) / edgePx).coerceIn(0f, 1f)
                     else -> 0f
                 }
                 if (depth != 0f && dt > 0f) {
@@ -550,6 +629,8 @@ fun CalendarScreen() {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     dragList = currentEntries
                     dragKey = hit.key as String
+                    dragMoved = false
+                    dropKey = null
                     fingerY = at.y
                     grabY = at.y - hit.offset
                     pulse.fire((hit.key as String).removePrefix("e/"))
@@ -558,13 +639,14 @@ fun CalendarScreen() {
                     if (dragKey == null) return@detectDragGesturesAfterLongPress
                     change.consume()
                     fingerY = change.position.y
+                    dragMoved = true
                     moveIfNeeded()
                 },
                 onDragEnd = { endDrag() },
                 onDragCancel = { endDrag() }
             )
         } else Modifier
-        LazyColumn(Modifier.weight(1f - gridShare).fillMaxWidth().then(listDrag), state = listState) {
+        LazyColumn(Modifier.weight(if (hidden) 1f else 1f - gridShare).fillMaxWidth().then(listDrag), state = listState) {
             if (shownEntries.isEmpty()) {
                 item(key = "empty") {
                     Text(
@@ -578,15 +660,29 @@ fun CalendarScreen() {
                 val k = CalendarData.entryKey(item)
                 val listKey = "e/$k"
                 val dragging = dragKey == listKey
+                val dropping = dropKey == listKey
                 PulseBox(
                     k, Color(item.color), pulse,
                     Modifier
-                        .zIndex(if (dragging) 1f else 0f)
+                        // The others slide to their new places; The dragged one follows the finger instead.
+                        .animateItem(
+                            fadeInSpec = null, fadeOutSpec = null,
+                            placementSpec = if (dragging || dropping) null
+                            else androidx.compose.animation.core.spring(
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                                visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold
+                            )
+                        )
+                        .zIndex(if (dragging || dropping) 1f else 0f)
                         .graphicsLayer {
                             // Under the finger: Where it was grabbed, wherever the list has put the entry.
-                            translationY = if (!dragging) 0f else {
-                                val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == listKey }
-                                if (info == null) 0f else fingerY - grabY - info.offset
+                            translationY = when {
+                                dragging -> {
+                                    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == listKey }
+                                    if (info == null) 0f else fingerY - grabY - info.offset
+                                }
+                                dropping -> dropY.value
+                                else -> 0f
                             }
                         }
                 ) {
@@ -602,6 +698,26 @@ fun CalendarScreen() {
                 }
             }
         }
+    }
+
+    if (askReset) {
+        AlertDialog(
+            onDismissRequest = { askReset = false },
+            title = { Text("Reset this day's order?") },
+            text = {
+                Text(
+                    "The list of ${LocalDate.ofEpochDay(selected).format(DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ENGLISH))} " +
+                        "goes back to its normal order (also on the calendars and widgets)."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    Repo.clearOrder(selected)
+                    askReset = false
+                }) { Text("Reset") }
+            },
+            dismissButton = { TextButton(onClick = { askReset = false }) { Text("Cancel") } }
+        )
     }
 
     PlanDialogs(planUi, defaultDay = selected)
