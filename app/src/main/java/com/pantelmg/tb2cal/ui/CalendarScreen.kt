@@ -192,7 +192,7 @@ fun CalendarScreen() {
         if (!settings.gmailView) return@LaunchedEffect
         val st = settings
         withContext(Dispatchers.IO) { runCatching { CalendarData.fetchGmail(ctx, gridStart, gridEnd, st) }.getOrNull() }
-            ?.let { gmail = it }
+            ?.let { if (it != gmail) gmail = it } // Unchanged (the usual case): Nothing is redrawn.
         withContext(Dispatchers.IO) {
             listOf(-1L, 1L).forEach { m ->
                 val g = CalendarData.gridStart(month.plusMonths(m), locale)
@@ -284,8 +284,8 @@ fun CalendarScreen() {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = if (hidden) "Next day" else "Next month")
             }
             IconButton(onClick = {
-                // Hiding: The grid shows the selected day's month again when it comes back.
-                if (!hidden) showDay(selected)
+                // Hiding: The month only changes if the chosen day isn't in this grid (no reloading, no flash).
+                if (!hidden && (selected < gridStart.toEpochDay() || selected >= gridEnd.toEpochDay())) showDay(selected)
                 Repo.updateSettings { it.copy(calendarHidden = !it.calendarHidden) }
             }) {
                 Icon(
@@ -502,7 +502,6 @@ fun CalendarScreen() {
         // Let go: The entry glides from under the finger into its place (no snap).
         var dropKey by remember { mutableStateOf<String?>(null) }
         val dropY = remember { androidx.compose.animation.core.Animatable(0f) }
-        val shownEntries = dragList ?: entries
         val listState = rememberLazyListState()
         val haptic = LocalHapticFeedback.current
         val density = LocalDensity.current
@@ -557,8 +556,8 @@ fun CalendarScreen() {
             dragMoved = false
         }
         // While dragging, every frame: Slow scroll near an edge (same speed on any refresh rate), and moves settle.
-        LaunchedEffect(dragKey != null) {
-            if (dragKey == null) return@LaunchedEffect
+        // Started by the drag itself (not by the screen), so starting or ending a drag doesn't redraw the month grid.
+        fun startFrameLoop() = scope.launch {
             var last = 0L
             while (dragKey != null) {
                 val now = withFrameNanos { it }
@@ -632,6 +631,7 @@ fun CalendarScreen() {
                     dragMoved = false
                     dropKey = null
                     fingerY = at.y
+                    startFrameLoop()
                     grabY = at.y - hit.offset
                     pulse.fire((hit.key as String).removePrefix("e/"))
                 },
@@ -647,6 +647,8 @@ fun CalendarScreen() {
             )
         } else Modifier
         LazyColumn(Modifier.weight(if (hidden) 1f else 1f - gridShare).fillMaxWidth().then(listDrag), state = listState) {
+            // Read here (not by the screen): A move during a drag redraws only the list, never the month grid.
+            val shownEntries = dragList ?: entries
             if (shownEntries.isEmpty()) {
                 item(key = "empty") {
                     Text(
@@ -667,7 +669,8 @@ fun CalendarScreen() {
                         // The others slide to their new places; The dragged one follows the finger instead.
                         .animateItem(
                             fadeInSpec = null, fadeOutSpec = null,
-                            placementSpec = if (dragging || dropping) null
+                            // Only during a drag: When entries just load or change, they're in place at once.
+                            placementSpec = if (dragging || dropping || (dragKey == null && dropKey == null)) null
                             else androidx.compose.animation.core.spring(
                                 stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
                                 visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold
