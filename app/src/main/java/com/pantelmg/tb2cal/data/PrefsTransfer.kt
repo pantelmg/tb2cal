@@ -25,11 +25,11 @@ object PrefsTransfer {
     /**
      * Settings that belong to this phone, never written to the file and kept on import: Completion sound, TB2Cal's
      * phone calendar and notification channel, Gmail import (on/off, account, languages, hidden events), Background
-     * reliability steps and permissions, and passing states (waiting completion screen, widget's day).
+     * reliability steps and permissions, the tutorial having been seen, and passing states (waiting completion screen, widget's day).
      */
     private val PHONE_KEYS = listOf(
         "sound", "soundTitle", "cal", "chv",
-        "ackAuto", "ackSaver", "ackLock", "ackFloating", "ackCalSync", "ackCalAuto", "ackCalData", "hideRel", "permAsked",
+        "ackAuto", "ackSaver", "ackLock", "ackFloating", "ackCalSync", "ackCalAuto", "ackCalData", "hideRel", "permAsked", "tutorial",
         "gmailView", "gmailAccount", "holidayOff", "hidden", "hiddenOnce",
         "showCompletion", "planDay", "planDayOn",
     )
@@ -40,7 +40,7 @@ object PrefsTransfer {
         ackAutostart = cur.ackAutostart, ackBatterySaver = cur.ackBatterySaver, ackRecentsLock = cur.ackRecentsLock,
         ackFloating = cur.ackFloating, ackCalendarSync = cur.ackCalendarSync, ackCalendarAutostart = cur.ackCalendarAutostart,
         ackCalendarData = cur.ackCalendarData, hideReliabilityCard = cur.hideReliabilityCard,
-        permissionsAsked = cur.permissionsAsked,
+        permissionsAsked = cur.permissionsAsked, tutorialSeen = cur.tutorialSeen,
         gmailView = cur.gmailView, gmailAccount = cur.gmailAccount, holidayOff = cur.holidayOff,
         hiddenEvents = cur.hiddenEvents, hiddenInstances = cur.hiddenInstances,
         completionToShow = cur.completionToShow, planWidgetDay = cur.planWidgetDay, planWidgetDaySetOn = cur.planWidgetDaySetOn,

@@ -121,9 +121,9 @@ class Pulse {
     }
 }
 
-/** Pulses its content's background once when [pulse] fires for [key]. */
+/** Pulses its content's background once when [pulse] fires for [key] (Calendar day list, Edit TimeBlocks). */
 @Composable
-private fun PulseBox(key: String, color: Color, pulse: Pulse, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun PulseBox(key: String, color: Color, pulse: Pulse, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val a = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(pulse.n) {
         if (pulse.n > pulse.played && pulse.key == key) {

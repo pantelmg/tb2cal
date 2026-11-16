@@ -212,6 +212,8 @@ data class Settings(
     val gmailView: Boolean = false,
     /** First-launch permission prompt already shown. */
     val permissionsAsked: Boolean = false,
+    /** The tutorial was seen (or skipped) after a fresh install; Settings → Tutorial opens it any time. */
+    val tutorialSeen: Boolean = false,
     /** Countdown presets on the main screen (minutes, ascending). */
     val presets: List<Int> = DEFAULT_PRESETS,
     /** Calendar tab and widget: Merge same-name TimeBlocks of a day into one total. */
@@ -278,7 +280,7 @@ data class Settings(
         .put("showCompletion", completionToShow).put("ackFloating", ackFloating)
         .put("hideRel", hideReliabilityCard)
         .put("ackCalSync", ackCalendarSync)
-        .put("ackCalAuto", ackCalendarAutostart).put("ackCalData", ackCalendarData).put("permAsked", permissionsAsked).put("autoReg", autoRegister)
+        .put("ackCalAuto", ackCalendarAutostart).put("ackCalData", ackCalendarData).put("permAsked", permissionsAsked).put("tutorial", tutorialSeen).put("autoReg", autoRegister)
         .put("gmailView", gmailView)
         .put("timers", JSONObject().also { j -> blockTimers.forEach { (k, v) -> j.put(k, v) } })
         .put("presets", org.json.JSONArray().also { a -> presets.forEach { a.put(it) } })
@@ -354,6 +356,8 @@ data class Settings(
             hiddenInstances = o.optJSONArray("hiddenOnce")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
             onwardOff = o.optJSONArray("onwardOff")?.let { a -> List(a.length()) { a.optString(it) }.toSet() } ?: emptySet(),
             permissionsAsked = o.optBoolean("permAsked"),
+            // Saved settings without it: Installed before the tutorial existed, so it isn't shown (fresh installs only).
+            tutorialSeen = o.optBoolean("tutorial", true),
         )
     }
 }

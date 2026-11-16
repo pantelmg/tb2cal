@@ -109,7 +109,7 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData: () -> Unit, onOpenTutorial: () -> Unit) {
     val ctx = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val settings by Repo.settings.collectAsState()
@@ -245,11 +245,23 @@ fun SettingsScreen(onBack: () -> Unit, onOpenReliability: () -> Unit, onOpenData
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         Text(
-            "Completion alert, secondary color, calendar and Task/Event preferences, data management, export/import of " +
-                "preferences and background reliability.",
+            "Tutorial, completion alert, secondary color, calendar and Task/Event preferences, data management, " +
+                "export/import of preferences and background reliability.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // ---- Tutorial (also shown once on a fresh install) ----
+        SectionLabel("Getting started")
+        Card(Modifier.fillMaxWidth()) {
+            SettingRow(
+                icon = painterResource(R.drawable.ic_s_tutorial),
+                title = "Tutorial",
+                subtitle = "A short tour of TB2Cal's tabs, widgets and settings.",
+                onClick = onOpenTutorial,
+                trailing = { Chevron() }
+            )
+        }
 
         // ---- Completion alert ----
         SectionLabel("Completion alert")

@@ -47,7 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.pantelmg.tb2cal.calendar.CalendarWriter
 
-enum class Screen { MAIN, CALENDAR, STATS, GOALS, EDIT, PRESETS, SETTINGS, COMPLETION, RELIABILITY, DATA }
+enum class Screen { MAIN, CALENDAR, STATS, GOALS, EDIT, PRESETS, SETTINGS, COMPLETION, RELIABILITY, DATA, TUTORIAL }
 
 class MainActivity : ComponentActivity() {
     private val navRequest = MutableStateFlow<Screen?>(null)
@@ -186,9 +186,15 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
     BackHandler(enabled = screen != Screen.MAIN) {
         when (screen) {
             Screen.COMPLETION -> completionFinished()?.let { screen = it }
-            Screen.DATA -> screen = Screen.SETTINGS
+            Screen.DATA, Screen.TUTORIAL -> screen = Screen.SETTINGS
             else -> screen = Screen.MAIN
         }
+    }
+    // Fresh install: The tutorial first, then the permissions (they make sense by then).
+    val tutorialSeen = Repo.settings.collectAsState().value.tutorialSeen
+    if (!tutorialSeen) {
+        TutorialScreen(firstRun = true, onDone = { Repo.updateSettings { it.copy(tutorialSeen = true) } })
+        return
     }
     FirstRunPermissions()
 
@@ -243,10 +249,12 @@ private fun AppRoot(navRequest: MutableStateFlow<Screen?>, completionFinished: (
                 onBack = { screen = Screen.MAIN },
                 onOpenReliability = { screen = Screen.RELIABILITY },
                 onOpenData = { screen = Screen.DATA },
+                onOpenTutorial = { screen = Screen.TUTORIAL },
             )
             Screen.DATA -> DataScreen(onBack = { screen = Screen.SETTINGS })
             Screen.COMPLETION -> CompletionScreen(onDone = { completionFinished()?.let { screen = it } })
             Screen.RELIABILITY -> ReliabilityScreen(onBack = { screen = Screen.MAIN })
+            Screen.TUTORIAL -> TutorialScreen(firstRun = false, onDone = { screen = Screen.SETTINGS })
         }
     }
 }

@@ -7,10 +7,17 @@ Use the app's widgets (Calendar, TimeBlock manager and Task/Event manager) for e
 period to PDF, set Goals, export, import or delete TB2Cal's data by date range, and export or import your
 preferences.
 
+## Tutorial
+Swipeable pages (Skip, Back, Next) on TimeBlocks, the Calendar, Tasks and Events, Statistics, Goals, the widgets,
+the honest past and your data. Shown once on a fresh install, before the app asks for notifications and calendar
+access; **Settings → Tutorial** (at the top) opens it any time.
+
 ## TimeBlocks tab
 - **Your list:** `study` and `workout` to start with. Add, rename and remove TimeBlocks, each with a color: 11 presets
   or any **Custom color…** (slide your finger on the color map, or type R, G, B
-  (0–255) or a hex code).
+  (0–255) or a hex code). **Touch and hold ≡** (at each row's end, short vibration) to move a TimeBlock up or down;
+  The list scrolls slowly when it reaches its top or bottom, and a short tap on ≡ pulses the row. The order is used in
+  the TimeBlock menu, the TimeBlock manager widget and the Goals tab. Holding the name box still selects its text.
 - **Two modes:** **Timer** counts down from the hours and minutes you set (or a preset); **Stopwatch** counts up until
   you tap COMPLETE. Each TimeBlock remembers its own countdown as soon as you change it, also for the widget.
 - **Presets:** Tap one under the countdown to set it. **Edit** (at the end of the row) adds, removes or resets them.
