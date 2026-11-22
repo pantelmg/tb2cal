@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,19 +47,25 @@ import androidx.compose.ui.unit.dp
 import com.pantelmg.tb2cal.R
 import kotlinx.coroutines.launch
 
-/** One tutorial page: Its icon (null: The app's symbol), title and a few short lines. */
-private class TutorialPage(val icon: (@Composable () -> Painter)?, val title: String, val lines: List<String>)
+/**
+ * One tutorial page: Its icon (the one the app itself uses for it; null: The app's symbol), an overline naming the
+ * screen ("Screen 1"…, or none), title and a few short lines.
+ */
+private class TutorialPage(
+    val icon: (@Composable () -> Painter)?, val overline: String?, val title: String, val lines: List<String>,
+)
 
 private fun tutorialPages(firstRun: Boolean) = listOf(
     TutorialPage(
-        null, "Welcome to TB2Cal",
+        null, null, "Welcome to TB2Cal",
         listOf(
             "TimeBlocks to Calendar: Track the time you really spend, and keep an honest record of it.",
             "Swipe for a short tour, or skip it; You can open it again from Settings."
         )
     ),
+    // The four screens, with their own tab icons.
     TutorialPage(
-        { painterResource(R.drawable.ic_w_hourglass) }, "TimeBlocks",
+        { rememberVectorPainter(Icons.Default.PlayArrow) }, "Screen 1", "TimeBlocks",
         listOf(
             "Pick a TimeBlock, choose Timer (counts down) or Stopwatch (counts up) and tap START.",
             "Only completed TimeBlocks are saved: In the app and in TB2Cal's own calendar on your phone.",
@@ -66,51 +73,44 @@ private fun tutorialPages(firstRun: Boolean) = listOf(
         )
     ),
     TutorialPage(
-        { rememberVectorPainter(Icons.Default.DateRange) }, "Calendar",
+        { rememberVectorPainter(Icons.Default.DateRange) }, "Screen 2", "Calendar",
         listOf(
-            "Every completed TimeBlock, month by month; Tap a day to see its list.",
-            "TB Total merges a day's same-name TimeBlocks; The eye hides the calendar for a bigger list.",
-            "Import from your Gmail (Settings) shows your Google events too, read-only."
+            "Every completed TimeBlock, month by month; Tap a day for its list, or the eye to hide the calendar for a bigger list.",
+            "+Task/Event: Tasks to tick (No date, a date or repeating) and Events (all day or timed), with reminders.",
+            "Touch and hold an entry to reorder the day; TB Total merges same-name TimeBlocks; Import from your Gmail adds your Google events."
         )
     ),
     TutorialPage(
-        { painterResource(R.drawable.ic_w_list_both) }, "Tasks and Events",
-        listOf(
-            "+Task/Event in the Calendar tab: Tasks to tick (No date, a date or repeating) and Events (all day or timed).",
-            "Timed ones remind you at their start, or earlier (Settings → Remind me before).",
-            "Touch and hold any entry of a day's list to move it; The order shows on the widgets too."
-        )
-    ),
-    TutorialPage(
-        { rememberVectorPainter(Icons.AutoMirrored.Filled.List) }, "Statistics",
+        { rememberVectorPainter(Icons.AutoMirrored.Filled.List) }, "Screen 3", "Statistics",
         listOf(
             "Daily, Weekly, Monthly and Yearly totals per TimeBlock, as a List, a Graph or a Pie.",
             "Switch to Tasks/Events for completed counts; Export PDF saves any period."
         )
     ),
     TutorialPage(
-        { painterResource(R.drawable.ic_s_goal) }, "Goals",
+        { painterResource(R.drawable.ic_s_goal) }, "Screen 4", "Goals",
         listOf(
             "Set a time goal per TimeBlock for a day, week, month or year, and watch its bar fill.",
             "Apply onward repeats a goal in every later period; The Active goals overview lists them all."
         )
     ),
+    // Then the rest, with the icons of their settings.
     TutorialPage(
-        { painterResource(R.drawable.ic_s_widgets) }, "Widgets",
+        { painterResource(R.drawable.ic_w_list_both) }, null, "App Widgets",
         listOf(
             "Calendar, TimeBlock manager and Task/Event manager: Add them from your home screen's widget picker.",
             "Start, pause and complete TimeBlocks, or tick Tasks, without opening the app."
         )
     ),
     TutorialPage(
-        { painterResource(R.drawable.ic_s_lock) }, "An honest past",
+        { rememberVectorPainter(Icons.Default.DateRange) }, null, "An honest past",
         listOf(
             "Allow previous day editing is OFF by default: Past days stay exactly as they were.",
             "Turn it ON in Settings to change them; Every late change is labelled, like Added in retrospect or Ticked later."
         )
     ),
     TutorialPage(
-        { painterResource(R.drawable.ic_s_shield) }, "Your data, your phone",
+        { painterResource(R.drawable.ic_s_shield) }, null, "Your data, your phone",
         listOf(
             "No account and no internet access: Everything stays on your phone.",
             "Data management and Export/Import preferences (Settings) make backups, also for a new phone.",
@@ -168,6 +168,13 @@ fun TutorialScreen(firstRun: Boolean, onDone: () -> Unit) {
                             }
                         }
                         Spacer(Modifier.height(28.dp))
+                        p.overline?.let {
+                            Text(
+                                it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
                         Text(
                             p.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center

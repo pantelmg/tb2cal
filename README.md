@@ -8,8 +8,9 @@ period to PDF, set Goals, export, import or delete TB2Cal's data by date range, 
 preferences.
 
 ## Tutorial
-Swipeable pages (Skip, Back, Next) on TimeBlocks, the Calendar, Tasks and Events, Statistics, Goals, the widgets,
-the honest past and your data. Shown once on a fresh install, before the app asks for notifications and calendar
+Swipeable pages (Skip, Back, Next): Welcome, then the four screens (Screen 1 TimeBlocks, Screen 2 Calendar with
+Tasks and Events, Screen 3 Statistics, Screen 4 Goals), App Widgets, An honest past and Your data, your phone; Each
+with the icon the app itself uses for it. Shown once on a fresh install, before the app asks for notifications and calendar
 access; **Settings → Tutorial** (at the top) opens it any time.
 
 ## TimeBlocks tab
