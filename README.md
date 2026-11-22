@@ -64,7 +64,8 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
   - **With a date:** On that day (calendars and lists), shown as **Today only** (or e.g. **02/11/26 only**), crossed
     out once ticked; With a time, it also gets a reminder.
   - **Repeating:** On their days, crossed out once ticked.
-- **Event:** Its name, date, all day or from–to times, and Repeat…. It counts as completed once its time is over.
+- **Event:** Its name, date, all day or from–to times, and Repeat…. It counts as completed once its time is over: Then it's crossed out in the
+  Calendar tab's day list, the Task/Event manager widget and Statistics (Gmail events too, in the day list and widget).
   Events are also saved in TB2Cal's phone calendar.
 - **In the calendars:** Outlined (transparent) entries, in one color for all tasks and one for all events (Settings).
 - **Hide the calendar** (the eye next to the month arrows): The day list takes the page; ‹ › then change the day, and

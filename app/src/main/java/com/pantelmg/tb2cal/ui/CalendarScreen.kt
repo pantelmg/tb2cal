@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.runtime.withFrameNanos
@@ -424,6 +425,23 @@ fun CalendarScreen() {
         val entries = remember(natural, orders, settings.allowReorder, selected) {
             if (settings.allowReorder) CalendarData.applyOrder(natural, orders[selected]) { CalendarData.entryKey(it) } else natural
         }
+        // Events are crossed out once over (TB2Cal's and Gmail's, like the widget): The clock moves on when the day's
+        // next event ends, and on returning to the app; Only the list's rows read it (no redraw of the grid).
+        var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        fun isEvent(i: DayItem) = i.plan?.kind == ItemKind.EVENT || (i.plan == null && !i.isTimeBlock)
+        LaunchedEffect(natural, clock) {
+            val next = natural.filter { isEvent(it) && it.endMs > clock }.minOfOrNull { it.endMs } ?: return@LaunchedEffect
+            kotlinx.coroutines.delay((next - System.currentTimeMillis()).coerceAtLeast(0L) + 500L)
+            clock = System.currentTimeMillis()
+        }
+        DisposableEffect(ctx) {
+            val lifecycle = (ctx as? androidx.lifecycle.LifecycleOwner)?.lifecycle
+            val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) clock = System.currentTimeMillis()
+            }
+            lifecycle?.addObserver(obs)
+            onDispose { lifecycle?.removeObserver(obs) }
+        }
         // The reset arrow shows only while this day's list differs from its normal order.
         val dayReordered = settings.allowReorder && entries.map { CalendarData.entryKey(it) } != natural.map { CalendarData.entryKey(it) }
         val currentNatural by rememberUpdatedState(natural)
@@ -691,10 +709,11 @@ fun CalendarScreen() {
                     // A short tap pulses too, as a hint that it can be moved (Tasks/Events also open).
                     val tapPulse = { if (settings.allowReorder) pulse.fire(k) }
                     val plan = item.plan
+                    val over = isEvent(item) && item.endMs <= clock
                     if (plan != null) {
-                        PlanRow(plan, item.planDay, item.done, item.color, planUi, onTouch = tapPulse)
+                        PlanRow(plan, item.planDay, item.done || over, item.color, planUi, onTouch = tapPulse)
                     } else {
-                        EntryRow(item, day, today, settings, tf, onTouch = tapPulse,
+                        EntryRow(item, day, today, settings, tf, crossed = over, onTouch = tapPulse,
                             onDelete = { toDelete = item }, onHide = { toHide = item })
                     }
                 }
@@ -855,11 +874,14 @@ private fun PlanRow(item: PlanItem, day: Long?, done: Boolean, color: Int, ui: P
     }
 }
 
-/** A TimeBlock or Gmail event in the day list: Its color, name and time; Bin (TimeBlocks) or hide (Gmail). */
+/**
+ * A TimeBlock or Gmail event in the day list: Its color, name and time; Bin (TimeBlocks) or hide (Gmail). A Gmail
+ * event is crossed out once over ([crossed]).
+ */
 @Composable
 private fun EntryRow(
     item: DayItem, day: LocalDate, today: LocalDate, settings: com.pantelmg.tb2cal.model.Settings,
-    tf: java.text.DateFormat, onTouch: () -> Unit, onDelete: () -> Unit, onHide: () -> Unit,
+    tf: java.text.DateFormat, crossed: Boolean, onTouch: () -> Unit, onDelete: () -> Unit, onHide: () -> Unit,
 ) {
     Row(
         Modifier
@@ -874,7 +896,11 @@ private fun EntryRow(
         }
         Spacer(Modifier.width(6.dp))
         Column(Modifier.weight(1f)) {
-            Text(item.label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                item.label, style = MaterialTheme.typography.bodyLarge,
+                textDecoration = if (crossed) TextDecoration.LineThrough else null,
+                color = if (crossed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+            )
             Text(
                 if (settings.tbTotal && item.isTimeBlock) "TimeBlock Total"
                 else buildString {
