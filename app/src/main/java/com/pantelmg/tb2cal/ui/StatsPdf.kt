@@ -21,7 +21,8 @@ import java.util.Locale
 
 /**
  * Writes the Statistics graph of one period as an A4 PDF: Title, period, total, the stacked-column graph with
- * its axes, then a table of every TimeBlock name (count, total, share). Long tables continue on more pages.
+ * its axes, the pie of each TimeBlock's share, then a table of every TimeBlock name (count, total, share). Long
+ * tables continue on more pages.
  */
 internal object StatsPdf {
     private const val W = 595 // A4 in points
@@ -133,6 +134,45 @@ internal object StatsPdf {
             }
             c.drawText(axisName, (left + right) / 2, bottom + 30f, grayCenter)
 
+            // ---- Pie: Each TimeBlock's share, clockwise from the top in the table's order ----
+            val pieTop = bottom + 50f
+            val pieD = 150f
+            if (total > 0) {
+                val oval = android.graphics.RectF(W / 2f - pieD / 2, pieTop, W / 2f + pieD / 2, pieTop + pieD)
+                val cx = W / 2f
+                val cy = pieTop + pieD / 2
+                val rad = pieD / 2
+                var angle = -90f
+                val sweeps = rows.map { 360f * it.totalMs / total }
+                rows.forEachIndexed { i, r ->
+                    fill.color = colors[r.key] ?: DEFAULT_COLOR
+                    c.drawArc(oval, angle, sweeps[i], true, fill)
+                    angle += sweeps[i]
+                }
+                if (rows.size > 1) {
+                    val sep = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); strokeWidth = 1.5f }
+                    angle = -90f
+                    sweeps.forEach { sw ->
+                        val a = Math.toRadians(angle.toDouble())
+                        c.drawLine(cx, cy, cx + rad * kotlin.math.cos(a).toFloat(), cy + rad * kotlin.math.sin(a).toFloat(), sep)
+                        angle += sw
+                    }
+                }
+                // Percentages inside the slices of 6% and more (the table lists them all).
+                val pct = Paint(bold).apply { color = 0xFFFFFFFF.toInt(); textSize = 10f; textAlign = Paint.Align.CENTER }
+                angle = -90f
+                rows.forEachIndexed { i, r ->
+                    val sw = sweeps[i]
+                    if (sw >= 360f * 0.06f) {
+                        val mid = Math.toRadians((angle + sw / 2).toDouble())
+                        val dist = if (rows.size == 1) 0f else rad * 0.62f
+                        c.drawText(shareText(r.totalMs, total), cx + dist * kotlin.math.cos(mid).toFloat(),
+                            cy + dist * kotlin.math.sin(mid).toFloat() + 3.5f, pct)
+                    }
+                    angle += sw
+                }
+            }
+
             // ---- Table ----
             val colCount = 380f
             val colTotal = 460f
@@ -144,7 +184,7 @@ internal object StatsPdf {
                 c.drawText("Share", colShare, y, boldRight)
                 c.drawLine(M, y + 6f, right, y + 6f, axis)
             }
-            y = bottom + 66f
+            y = if (total > 0) pieTop + pieD + 40f else bottom + 66f
             header(y)
             y += 24f
             rows.forEach { r ->

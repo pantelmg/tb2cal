@@ -84,7 +84,7 @@ private fun tutorialPages(firstRun: Boolean) = listOf(
     TutorialPage(
         { rememberVectorPainter(Icons.AutoMirrored.Filled.List) }, "Statistics",
         listOf(
-            "Daily, Weekly, Monthly and Yearly totals per TimeBlock, as a List or a Graph.",
+            "Daily, Weekly, Monthly and Yearly totals per TimeBlock, as a List, a Graph or a Pie.",
             "Switch to Tasks/Events for completed counts; Export PDF saves any period."
         )
     ),

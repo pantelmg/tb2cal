@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.TB2Cal" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- The window's own background (before the first screen draws) is the app's background, never white. -->
+    <style name="Theme.TB2Cal" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_bg</item>
+        <item name="android:colorBackground">@color/app_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
     <!-- Quick add from the widget: Only the sheet shows, over the home screen. -->
     <style name="Theme.TB2Cal.Translucent" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>

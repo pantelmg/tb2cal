@@ -26,6 +26,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.text.drawText
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -198,11 +201,10 @@ fun StatsScreen() {
     // TimeBlocks or Tasks/Events (remembered); In Tasks/Events: Tasks, Events or Both (remembered).
     val te = settings.statsMode == "TE"
     val which = settings.statsItems
-    // Period and List/Graph are remembered (saved in the settings).
+    // Period and List/Graph/Pie are remembered (saved in the settings).
     val period = runCatching { StatsPeriod.valueOf(settings.statsPeriod) }.getOrDefault(StatsPeriod.WEEKLY)
-    val graph = settings.statsGraph
+    val view = settings.statsView
     fun setPeriod(p: StatsPeriod) = Repo.updateSettings { it.copy(statsPeriod = p.name) }
-    fun setGraph(g: Boolean) = Repo.updateSettings { it.copy(statsGraph = g) }
     var offset by rememberSaveable { mutableIntStateOf(0) }
     var toDelete by remember { mutableStateOf<StatRow?>(null) }
     val requestedDay by StatsNav.day.collectAsState()
@@ -343,7 +345,7 @@ fun StatsScreen() {
         if (te) {
             PlanStats(planRows, planDone, which)
         } else {
-        // ---- Total + List/Graph switch ----
+        // ---- Total + List/Graph/Pie, stacked (like Tasks/Events/Both) ----
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -358,18 +360,10 @@ fun StatsScreen() {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                SingleChoiceSegmentedButtonRow {
-                    SegmentedButton(
-                        selected = !graph,
-                        onClick = { setGraph(false) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) { Text("List") }
-                    SegmentedButton(
-                        selected = graph,
-                        onClick = { setGraph(true) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) { Text("Graph") }
-                }
+                Spacer(Modifier.width(12.dp))
+                StackedChoice(
+                    listOf("LIST" to "List", "GRAPH" to "Graph", "PIE" to "Pie"), view
+                ) { v -> Repo.updateSettings { it.copy(statsView = v) } }
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -381,8 +375,10 @@ fun StatsScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
-        } else if (graph) {
+        } else if (view == "GRAPH") {
             StatsGraph(history, rows, period, start, end, Modifier.weight(1f).fillMaxWidth())
+        } else if (view == "PIE") {
+            StatsPie(rows, total, Modifier.weight(1f).fillMaxWidth())
         } else {
             // Only this list scrolls, and only if it doesn't fit.
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -598,38 +594,9 @@ private fun ColumnScope.PlanStats(rows: List<PlanOccurrence>, done: Int, which: 
             }
             // Tasks / Events / Both, stacked (narrow), so the count and its description keep the room on the left.
             Spacer(Modifier.width(12.dp))
-            val boxShape = RoundedCornerShape(14.dp)
-            Column(
-                Modifier
-                    .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
-                    .clip(boxShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
-            ) {
-                listOf("TASKS" to "Tasks", "EVENTS" to "Events", "BOTH" to "Both").forEachIndexed { i, (key, label) ->
-                    if (i > 0) androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                    val sel = which == key
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            // Same colors as List/Graph: Unselected on the surface color (black in dark mode).
-                            .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
-                            .clickable { Repo.updateSettings { it.copy(statsItems = key) } }
-                            .padding(start = 10.dp, end = 14.dp, top = 5.dp, bottom = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            androidx.compose.material.icons.Icons.Default.Check, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(16.dp).alpha(if (sel) 1f else 0f)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            label, style = MaterialTheme.typography.labelLarge, maxLines = 1,
-                            color = if (sel) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
+            StackedChoice(
+                listOf("TASKS" to "Tasks", "EVENTS" to "Events", "BOTH" to "Both"), which
+            ) { v -> Repo.updateSettings { it.copy(statsItems = v) } }
         }
     }
     Spacer(Modifier.height(10.dp))
@@ -662,6 +629,135 @@ private fun ColumnScope.PlanStats(rows: List<PlanOccurrence>, done: Int, which: 
                         ).plus(Plan.honestyNotes(o.item, o.day)).plus(o.item.kind.label).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Choices stacked in a narrow box (Tasks/Events/Both, List/Graph/Pie): A tick and a tint on the chosen one. */
+@Composable
+private fun StackedChoice(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+    val boxShape = RoundedCornerShape(14.dp)
+    Column(
+        Modifier
+            .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+            .clip(boxShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline, boxShape)
+    ) {
+        options.forEachIndexed { i, (key, label) ->
+            if (i > 0) androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            val sel = selected == key
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    // Unselected on the surface color (black in dark mode).
+                    .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
+                    .clickable { onSelect(key) }
+                    .padding(start = 10.dp, end = 14.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Check, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(16.dp).alpha(if (sel) 1f else 0f)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    label, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                    color = if (sel) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+/** A share of the period as a whole percentage for a slice ("<1%" for tiny ones). */
+internal fun shareText(ms: Long, total: Long): String {
+    if (total <= 0) return "0%"
+    val p = ms * 100.0 / total
+    return if (p > 0 && p < 1) "<1%" else "${Math.round(p)}%"
+}
+
+/**
+ * Pie: Each TimeBlock's share of the period's total (shown in the card above), clockwise from the top in the
+ * list's order. Slices big enough carry their percentage (and time, when there's room); The legend below lists
+ * every TimeBlock with its time and share.
+ */
+@Composable
+private fun StatsPie(rows: List<StatRow>, total: Long, modifier: Modifier) {
+    val fallback = MaterialTheme.colorScheme.primary
+    val gap = MaterialTheme.colorScheme.background
+    val colors = rows.map { r -> GoogleColors.byKey(r.colorKey)?.let { Color(it.argb) } ?: fallback }
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val big = MaterialTheme.typography.titleSmall.copy(
+        color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+        shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.45f), blurRadius = 4f)
+    )
+    val small = big.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize, fontWeight = FontWeight.SemiBold)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Canvas(
+            Modifier
+                .fillMaxWidth(0.72f)
+                .widthIn(max = 280.dp)
+                .aspectRatio(1f)
+        ) {
+            if (total <= 0) return@Canvas
+            val r = size.minDimension / 2
+            val c = Offset(size.width / 2, size.height / 2)
+            var angle = -90f
+            val sweeps = rows.map { 360f * it.totalMs / total }
+            rows.forEachIndexed { i, _ ->
+                drawArc(colors[i], angle, sweeps[i], useCenter = true, topLeft = Offset(c.x - r, c.y - r), size = Size(2 * r, 2 * r))
+                angle += sweeps[i]
+            }
+            // Thin gaps between slices (none for a single TimeBlock).
+            if (rows.size > 1) {
+                angle = -90f
+                sweeps.forEach { sw ->
+                    val a = Math.toRadians(angle.toDouble())
+                    drawLine(gap, c, Offset(c.x + r * kotlin.math.cos(a).toFloat(), c.y + r * kotlin.math.sin(a).toFloat()), strokeWidth = 2.dp.toPx())
+                    angle += sw
+                }
+            }
+            // Labels inside the slices: Percentage from 6%, plus the time from 14%.
+            angle = -90f
+            rows.forEachIndexed { i, row ->
+                val sw = sweeps[i]
+                if (sw >= 360f * 0.06f) {
+                    val mid = Math.toRadians((angle + sw / 2).toDouble())
+                    val dist = if (rows.size == 1) 0f else r * 0.62f
+                    val p = Offset(c.x + dist * kotlin.math.cos(mid).toFloat(), c.y + dist * kotlin.math.sin(mid).toFloat())
+                    val pct = measurer.measure(shareText(row.totalMs, total), big)
+                    if (sw >= 360f * 0.14f) {
+                        val time = measurer.measure(Fmt.duration(row.totalMs), small)
+                        val h = pct.size.height + time.size.height
+                        drawText(pct, topLeft = Offset(p.x - pct.size.width / 2, p.y - h / 2))
+                        drawText(time, topLeft = Offset(p.x - time.size.width / 2, p.y - h / 2 + pct.size.height))
+                    } else {
+                        drawText(pct, topLeft = Offset(p.x - pct.size.width / 2, p.y - pct.size.height / 2))
+                    }
+                }
+                angle += sw
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        // Legend: Every TimeBlock with its time and share (only this scrolls, and only if it doesn't fit).
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(rows, key = { it.key }) { r ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ColorDot(r.colorKey, 14.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(r.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1)
+                    Text(Fmt.duration(r.totalMs), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        String.format(Locale.getDefault(), "%.1f%%", if (total > 0) r.totalMs * 100.0 / total else 0.0),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.widthIn(min = 52.dp)
                     )
                 }
             }

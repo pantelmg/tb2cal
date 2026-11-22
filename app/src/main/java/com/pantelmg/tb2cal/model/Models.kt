@@ -218,9 +218,9 @@ data class Settings(
     val presets: List<Int> = DEFAULT_PRESETS,
     /** Calendar tab and widget: Merge same-name TimeBlocks of a day into one total. */
     val tbTotal: Boolean = false,
-    /** Statistics tab: Last period (DAILY, WEEKLY, MONTHLY, YEARLY) and Graph instead of List. */
+    /** Statistics tab: Last period (DAILY, WEEKLY, MONTHLY, YEARLY) and view (LIST, GRAPH, PIE). */
     val statsPeriod: String = "WEEKLY",
-    val statsGraph: Boolean = false,
+    val statsView: String = "LIST",
     /** Goals tab: Last period, and the periods with "Apply onward" turned OFF (it's ON by default). */
     val goalsPeriod: String = "WEEKLY",
     val onwardOff: Set<String> = emptySet(),
@@ -284,7 +284,7 @@ data class Settings(
         .put("gmailView", gmailView)
         .put("timers", JSONObject().also { j -> blockTimers.forEach { (k, v) -> j.put(k, v) } })
         .put("presets", org.json.JSONArray().also { a -> presets.forEach { a.put(it) } })
-        .put("tbTotal", tbTotal).put("statsPeriod", statsPeriod).put("statsGraph", statsGraph)
+        .put("tbTotal", tbTotal).put("statsPeriod", statsPeriod).put("statsView", statsView)
         .put("goalsPeriod", goalsPeriod)
         .put("onwardOff", org.json.JSONArray().also { a -> onwardOff.forEach { a.put(it) } })
         .put("accent", accent)
@@ -329,7 +329,8 @@ data class Settings(
                 ?.takeIf { it.isNotEmpty() } ?: DEFAULT_PRESETS,
             tbTotal = o.optBoolean("tbTotal"),
             statsPeriod = o.optString("statsPeriod").ifEmpty { "WEEKLY" },
-            statsGraph = o.optBoolean("statsGraph"),
+            // (Saved before Pie existed: Graph ON/OFF.)
+            statsView = o.optString("statsView").ifEmpty { if (o.optBoolean("statsGraph")) "GRAPH" else "LIST" },
             goalsPeriod = o.optString("goalsPeriod").ifEmpty { "WEEKLY" },
             accent = o.optString("accent"),
             dayEntries = o.optInt("dayEntries", 3).coerceIn(3, 5),

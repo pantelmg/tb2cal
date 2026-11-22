@@ -416,12 +416,10 @@ fun CalendarScreen() {
         val tf = DateFormat.getTimeFormat(ctx)
         // Only this list scrolls (and only if it doesn't fit). It starts with the open tasks that have no date (from the
         // day each was added onward), then the day's entries; With reordering on, in the chosen order.
-        val undatedOpen = remember(planItems, selected) { Plan.openUndatedOn(planItems, selected) }
         val taskColor = Plans.color(ItemKind.TASK)
-        val natural = remember(undatedOpen, dayItems, selected) {
-            undatedOpen.map { t ->
-                DayItem(t.title, taskColor, 0L, 0L, allDay = true, isTimeBlock = false, plan = t, planDay = null)
-            }.plus(dayItems).distinctBy { CalendarData.entryKey(it) } // (Each entry once: The list needs unique keys.)
+        // (Tasks without a date ticked today keep their place among the open ones; Each entry once, for unique keys.)
+        val natural = remember(planItems, dayItems, selected) {
+            CalendarData.dayList(dayItems, planItems, selected, taskColor).distinctBy { CalendarData.entryKey(it) }
         }
         val entries = remember(natural, orders, settings.allowReorder, selected) {
             if (settings.allowReorder) CalendarData.applyOrder(natural, orders[selected]) { CalendarData.entryKey(it) } else natural

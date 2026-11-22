@@ -161,9 +161,33 @@ object CalendarData {
         return out
     }
 
-    /** Sorted for showing: All-day entries first, then by time. */
+    /** A task without a date (open, or ticked on that day). */
+    private fun DayItem.undatedTask() = plan?.undated == true
+
+    /**
+     * Sorted for showing: Tasks without a date ticked that day first (by when each was added, as in the No-date
+     * group of the day's list), then all-day entries, then by time. Ticking never moves an entry.
+     */
     fun sorted(map: Map<LocalDate, List<DayItem>>): Map<LocalDate, List<DayItem>> =
-        map.mapValues { (_, list) -> list.sortedWith(compareByDescending<DayItem> { it.allDay }.thenBy { it.startMs }) }
+        map.mapValues { (_, list) ->
+            list.sortedWith(
+                compareBy<DayItem>({ if (it.undatedTask()) 0 else if (it.allDay) 1 else 2 })
+                    .thenBy { if (it.undatedTask()) it.plan!!.createdAt else it.startMs }
+            )
+        }
+
+    /**
+     * A day's list in its normal order (Calendar tab and Task/Event widget alike): The tasks without a date first,
+     * open ones (from the day each was added on) and the ones ticked that day together, by when each was added, so
+     * ticking one keeps it in its place; Then the day's other entries as [sorted] has them. Reordering applies on top.
+     */
+    fun dayList(dayItems: List<DayItem>, items: List<PlanItem>, day: Long, taskColor: Int): List<DayItem> {
+        val open = Plan.openUndatedOn(items, day).map { t ->
+            DayItem(t.title, taskColor, 0L, 0L, allDay = true, isTimeBlock = false, plan = t, planDay = null)
+        }
+        val (ticked, rest) = dayItems.partition { it.undatedTask() }
+        return (open + ticked).sortedBy { it.plan!!.createdAt } + rest
+    }
 
     // ---- Gmail events: Read from the phone's calendar storage (slow), kept in memory for instant redraws ----
 

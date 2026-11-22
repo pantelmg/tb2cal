@@ -58,7 +58,8 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
   same day shows as **Today only**, or e.g. **02/11/26 only** once that day has passed).
   - **No date** (like Google Tasks): Listed, marked "No date", at the top of the day lists (app and widget) from the
     day it was added onward until ticked or deleted; Not in the calendars until then; Once ticked it shows, crossed
-    out, on the day it was done.
+    out, on the day it was done, in the same place (with the other tasks without a date, by when each was added).
+    Ticking never moves an entry, in the app, the calendars or the widget.
   - **With a date:** On that day (calendars and lists), shown as **Today only** (or e.g. **02/11/26 only**), crossed
     out once ticked; With a time, it also gets a reminder.
   - **Repeating:** On their days, crossed out once ticked.
@@ -110,13 +111,15 @@ manager widget's **+**, which ask: Add Task (a ticked square) or Add Event (a ca
 
 ## Statistics tab
 - **Daily, Weekly, Monthly and Yearly** totals per TimeBlock name; ‹ › go to earlier or later periods. The period and
-  List/Graph you picked are remembered.
+  view you picked (**List / Graph / Pie**, stacked next to the total) are remembered.
 - **List:** Each name with its count, total and a bar; The bin deletes that sum from Statistics (after you confirm).
 - **Graph:** Stacked columns per hour (daily), day (weekly, monthly) or month (yearly), in the TimeBlocks' colors.
+- **Pie:** Each TimeBlock's share of the total (shown above it), clockwise from the top; Slices of 6% or more show
+  their percentage, and from 14% their time too. Below, every TimeBlock with its time and share.
 - **TimeBlocks / Tasks/Events** (remembered): In Tasks/Events, the card shows how many are completed, with
-  **Tasks / Events / Both** (remembered) in place of List/Graph, and the period's list below, completed ones crossed
+  **Tasks / Events / Both** (remembered) in place of List/Graph/Pie, and the period's list below, completed ones crossed
   out.
-- **Export PDF:** Asks what to include: TimeBlocks (the graph and a table of every TimeBlock: count, total, share),
+- **Export PDF:** Asks what to include: TimeBlocks (the graph, the pie and a table of every TimeBlock: count, total, share),
   Tasks and/or Events (the completed ones of the period). The file is named `TB2Cal Statistics` + the period: `TB2Cal Statistics 11 Nov 2026`,
   `TB2Cal Statistics 09 to 15 Nov 2026`, `TB2Cal Statistics 27 Oct to 02 Nov 2026`, `TB2Cal Statistics Oct 2026` or
   `TB2Cal Statistics 2026`.
@@ -180,8 +183,9 @@ In the widget picker: Calendar, TimeBlock manager, Task/Event manager.
   day arrows doesn't switch it) with its icon (white versions of the Add icons: A ticked square for Tasks, a calendar for Events; For
   Tasks/Events a closed square split corner to corner, a small tick above-left and a small calendar below-right),
   then **‹ Today ›** (always in the same place; ‹ › show other days as DD/MM, back to Today at midnight) and **+** (in
-  a rounded square). Below: Open tasks without a date (from the day each was added) and the day's tasks, each with an outlined square to
-  tick (or untick); The day's events, with a solid square.
+  a rounded square). Below: The Calendar tab's list of that day, in the same order (also when reordered), without
+  TimeBlocks: Tasks with an outlined square to tick (or untick), events with a solid square. On Android 12 and later
+  the rows are kept inside the widget itself, so it keeps showing them even when Android closes TB2Cal.
   **Completed on the Task/Event widget** (Settings): Ticked tasks and past events stay **Crossed out** until the day
   ends (default), or are **Removed** from the list. The widget redraws by itself when an event ends and at midnight.
 
